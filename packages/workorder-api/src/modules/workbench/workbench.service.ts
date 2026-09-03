@@ -768,4 +768,84 @@ export class WorkbenchService {
       });
     }
   }
+
+  async updateProject(id: string, data: { name?: string; region?: string; manager?: string; phone?: string; status?: string }) {
+    const project = await this.prisma.project.findUnique({ where: { id } });
+    if (!project) throw new NotFoundException('项目不存在');
+
+    const updated = await this.prisma.project.update({
+      where: { id },
+      data: {
+        name: data.name ?? undefined,
+        region: data.region ?? undefined,
+        manager: data.manager ?? undefined,
+        phone: data.phone ?? undefined,
+        status: data.status ?? undefined,
+      },
+    });
+
+    await this.audit(project.id, '已更新项目信息', updated.name);
+    
+    return {
+      code: 0,
+      data: entity(updated.id, updated.name, [updated.region, updated.status].filter(Boolean).join(' · '), updated.status, {
+        manager: updated.manager ?? '—',
+        phone: updated.phone ?? '—',
+        region: updated.region ?? '—',
+      }),
+      message: '项目信息已更新',
+      snapshot: await this.bootstrap(project.id),
+    };
+  }
+
+  async stopProject(id: string) {
+    const project = await this.prisma.project.findUnique({ where: { id } });
+    if (!project) throw new NotFoundException('项目不存在');
+
+    const updated = await this.prisma.project.update({
+      where: { id },
+      data: { status: '已停用' },
+    });
+
+    await this.audit(project.id, '已停用项目', updated.name);
+    
+    return {
+      code: 0,
+      data: entity(updated.id, updated.name, [updated.region, updated.status].filter(Boolean).join(' · '), updated.status, {
+        manager: updated.manager ?? '—',
+        phone: updated.phone ?? '—',
+        region: updated.region ?? '—',
+      }),
+      message: '项目已停用',
+      snapshot: await this.bootstrap(project.id),
+    };
+  }
+
+  async deleteProject(id: string) {
+    const project = await this.prisma.project.findUnique({ where: { id } });
+    if (!project) throw new NotFoundException('项目不存在');
+
+    // Check if project has related data
+    const [spacesCount, workordersCount] = await Promise.all([
+      this.prisma.space.count({ where: { projectId: id } }),
+      this.prisma.workOrder.count({ where: { projectId: id } }),
+    ]);
+
+    if (spacesCount > 0 || workordersCount > 0) {
+      throw new BadRequestException('项目有关联数据，请先停用而非删除');
+    }
+
+    await this.prisma.project.delete({ where: { id } });
+    await this.audit(null, '已删除项目', project.name);
+    
+    // Return bootstrap from first available project
+    const firstProject = await this.prisma.project.findFirst({ orderBy: { createdAt: 'asc' } });
+    
+    return {
+      code: 0,
+      data: null,
+      message: '项目已删除',
+      snapshot: firstProject ? await this.bootstrap(firstProject.id) : { version: Date.now(), records: {}, activities: [] },
+    };
+  }
 }

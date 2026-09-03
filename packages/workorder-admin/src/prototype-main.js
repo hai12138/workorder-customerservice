@@ -11,6 +11,9 @@ import {
   putFlow,
   putSlaPolicies,
   assignWorkorder,
+  updateProject,
+  stopProject,
+  deleteProject,
 } from './api/workbench.js'
 import { notifyApi } from './api/notify.js'
 import { agentApi } from './api/agent.js'
@@ -207,6 +210,13 @@ function render() {
   document.querySelectorAll('.nav-group').forEach((g) => {
     if (g.querySelector(`[data-page="${current}"]`)) g.classList.add('open')
   })
+  
+  // Hide scopebar on projects page (managing project list itself)
+  const scopebar = document.querySelector('.scopebar')
+  if (scopebar) {
+    scopebar.style.display = current === 'projects' ? 'none' : ''
+  }
+  
   window.scrollTo(0, 0)
 }
 
@@ -271,7 +281,15 @@ function wechatMessagePreview() {
   )
 }
 
-const projectForm = `<form id="demoForm"><div class="form-grid"><div class="form-row"><label>* 项目名称</label><input id="f-title" required placeholder="例如：云栖雅苑"></div><div class="form-row"><label>地区/副标题</label><input id="f-sub" placeholder="华东 / 临江市"></div></div></form>`
+function projectForm(rec) {
+  return `<form id="demoForm"><div class="form-grid"><div class="form-row"><label>* 项目名称</label><input id="f-title" required placeholder="例如：云栖雅苑" value="${rec ? esc(rec.title) : ''}"></div><div class="form-row"><label>地区</label><input id="f-region" placeholder="华东 / 临江市" value="${rec?.values?.region || ''}"></div><div class="form-row"><label>项目管理员</label><input id="f-manager" placeholder="姓名" value="${rec?.values?.manager || ''}"></div><div class="form-row"><label>客服电话</label><input id="f-phone" placeholder="400-xxx-xxxx" value="${rec?.values?.phone || ''}"></div></div></form>`
+}
+
+function esc(str) {
+  const div = document.createElement('div')
+  div.textContent = str
+  return div.innerHTML
+}
 
 document.addEventListener('click', (e) => {
   const p = e.target.closest('[data-page]')
@@ -338,26 +356,73 @@ async function handleAction(act, a) {
       )
       return
     }
-    if (act === 'new-project' || act === 'project-edit') {
-      modal(act === 'new-project' ? '新建项目' : '编辑项目', projectForm, `<button class="btn" data-action="close">取消</button><button class="btn primary" data-action="save-project">保存</button>`)
+    if (act === 'new-project') {
+      modal('新建项目', projectForm(null), `<button class="btn" data-action="close">取消</button><button class="btn primary" data-action="save-project">保存</button>`)
+      return
+    }
+    if (act === 'project-edit') {
+      const id = a.dataset.id
+      const rec = records('projects').find((x) => x.id === id)
+      if (!rec) return toast('未找到项目')
+      modal('编辑项目', projectForm(rec), `<button class="btn" data-action="close">取消</button><button class="btn primary" data-action="save-project" data-id="${id}">保存</button>`)
       return
     }
     if (act === 'save-project') {
       const title = document.getElementById('f-title')?.value?.trim()
-      const subtitle = document.getElementById('f-sub')?.value?.trim() || ''
+      const region = document.getElementById('f-region')?.value?.trim() || ''
+      const manager = document.getElementById('f-manager')?.value?.trim() || ''
+      const phone = document.getElementById('f-phone')?.value?.trim() || ''
       if (!title) return toast('请填写项目名称')
-      await createRecord('projects', { title, subtitle })
-      await afterWrite('项目已保存')
+      
+      const id = a.dataset.id
+      if (id) {
+        await updateProject(id, { name: title, region, manager, phone })
+      } else {
+        await createRecord('projects', { title, subtitle: region, values: { manager, phone } })
+      }
+      await afterWrite(id ? '项目信息已更新' : '项目已创建')
       return
     }
     if (act === 'project-detail') {
       const id = a.dataset.id
       const rec = records('projects').find((x) => x.id === id) || records('projects')[0]
       if (!rec) return toast('未找到项目')
+      const isActive = rec.status && rec.status.includes('服务')
+      const actions = isActive
+        ? `<button class="btn" data-action="project-stop" data-id="${id}">停用项目</button>`
+        : `<button class="btn danger" data-action="project-delete" data-id="${id}">删除项目</button>`
       drawer(
         `${rec.title} · 项目详情`,
-        `<div class="actions">${badge(rec.status, 'ok')}<span class="muted">${rec.id}</span></div><div class="kv" style="margin-top:15px"><div><span>副标题</span><b>${rec.subtitle || '—'}</b></div><div><span>管理员</span><b>${rec.values?.manager || '—'}</b></div><div><span>电话</span><b>${rec.values?.phone || '—'}</b></div><div><span>空间数</span><b>${rec.values?.spaces ?? '—'}</b></div></div>`,
+        `<div class="actions">${badge(rec.status, rec.tone || 'ok')}<span class="muted">${rec.id}</span></div><div class="kv" style="margin-top:15px"><div><span>项目编号</span><b>${rec.id}</b></div><div><span>地区</span><b>${rec.values?.region || '—'}</b></div><div><span>管理员</span><b>${rec.values?.manager || '—'}</b></div><div><span>客服电话</span><b>${rec.values?.phone || '—'}</b></div><div><span>空间数</span><b>${rec.values?.spaces ?? '—'}</b></div><div><span>用户数</span><b>${rec.values?.users ?? '—'}</b></div><div><span>服务状态</span><b>${rec.status}</b></div></div><div class="actions" style="margin-top:20px;justify-content:flex-end"><button class="btn" data-action="project-edit" data-id="${id}">编辑项目</button>${actions}</div>`,
       )
+      return
+    }
+    if (act === 'project-stop') {
+      const id = a.dataset.id
+      const rec = records('projects').find((x) => x.id === id)
+      if (!rec) return toast('未找到项目')
+      modal('停用项目', `<div class="health"><b>确认停用「${esc(rec.title)}」？</b><p class="sub">停用后项目将不再接受新工单，现有工单可继续处理。</p></div>`, `<button class="btn" data-action="close">取消</button><button class="btn danger" data-action="confirm-project-stop" data-id="${id}">确认停用</button>`)
+      return
+    }
+    if (act === 'confirm-project-stop') {
+      await stopProject(a.dataset.id)
+      await afterWrite('项目已停用')
+      return
+    }
+    if (act === 'project-delete') {
+      const id = a.dataset.id
+      const rec = records('projects').find((x) => x.id === id)
+      if (!rec) return toast('未找到项目')
+      modal('删除项目', `<div class="health"><b>确认删除「${esc(rec.title)}」？</b><p class="sub">删除操作不可恢复。如项目有关联数据，系统将拒绝删除。</p></div>`, `<button class="btn" data-action="close">取消</button><button class="btn danger" data-action="confirm-project-delete" data-id="${id}">确认删除</button>`)
+      return
+    }
+    if (act === 'confirm-project-delete') {
+      try {
+        await deleteProject(a.dataset.id)
+        await afterWrite('项目已删除')
+      } catch (err) {
+        toast(err?.message || '删除失败')
+      }
       return
     }
     if (act === 'new-space') {
@@ -606,10 +671,6 @@ async function handleAction(act, a) {
     }
     if (act === 'download-skill' || act === 'reset-agent-demo') {
       toast(act === 'download-skill' ? 'Skill 包导出为演示操作' : '联调会话已重置')
-      return
-    }
-    if (act === 'confirm-disable') {
-      modal('停用项目', `<p>停用为受控操作；当前仅演示确认框。</p>`, `<button class="btn" data-action="close">取消</button><button class="btn danger" data-action="close">确认停用（演示）</button>`)
       return
     }
     if (act === 'variant-prev' || act === 'variant-next') {

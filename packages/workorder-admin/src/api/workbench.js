@@ -79,3 +79,22 @@ export async function putSlaPolicies(policies, projectId) {
 export async function assignWorkorder(id, assignee) {
   return runCommand({ type: 'assign-workorder', id, assignee })
 }
+
+export async function updateProject(id, data) {
+  return api(`/projects/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function stopProject(id) {
+  return api(`/projects/${id}/stop`, {
+    method: 'POST',
+  })
+}
+
+export async function deleteProject(id) {
+  return api(`/projects/${id}`, {
+    method: 'DELETE',
+  })
+}
