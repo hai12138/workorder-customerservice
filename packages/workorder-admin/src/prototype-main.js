@@ -211,6 +211,13 @@ function render() {
   document.querySelectorAll('.nav-group').forEach((g) => {
     if (g.querySelector(`[data-page="${current}"]`)) g.classList.add('open')
   })
+  
+  // Hide scopebar on projects page (managing project list itself)
+  const scopebar = document.querySelector('.scopebar')
+  if (scopebar) {
+    scopebar.style.display = current === 'projects' ? 'none' : ''
+  }
+  
   window.scrollTo(0, 0)
 }
 
@@ -275,7 +282,15 @@ function wechatMessagePreview() {
   )
 }
 
-const projectForm = `<form id="demoForm"><div class="form-grid"><div class="form-row"><label>* 项目名称</label><input id="f-title" required placeholder="例如：云栖雅苑"></div><div class="form-row"><label>地区</label><input id="f-region" placeholder="例如：华东 / 临江市"></div><div class="form-row"><label>客服电话</label><input id="f-phone" placeholder="例如：400-123-4567"></div><div class="form-row"><label>项目负责人</label><input id="f-manager" placeholder="例如：张经理"></div></div></form>`
+function projectForm(rec) {
+  return `<form id="demoForm"><div class="form-grid"><div class="form-row"><label>* 项目名称</label><input id="f-title" required placeholder="例如：云栖雅苑" value="${rec ? esc(rec.title) : ''}"></div><div class="form-row"><label>地区</label><input id="f-region" placeholder="例如：华东 / 临江市" value="${rec?.values?.region || ''}"></div><div class="form-row"><label>客服电话</label><input id="f-phone" placeholder="例如：400-123-4567" value="${rec?.values?.phone || ''}"></div><div class="form-row"><label>项目负责人</label><input id="f-manager" placeholder="例如：张经理" value="${rec?.values?.manager || ''}"></div></div></form>`
+}
+
+function esc(str) {
+  const div = document.createElement('div')
+  div.textContent = str
+  return div.innerHTML
+}
 
 document.addEventListener('click', (e) => {
   const p = e.target.closest('[data-page]')
