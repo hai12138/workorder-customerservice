@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../../common/guards/jwt-auth.guard';
 import { RequirePermissions, RolesGuard } from '../../common/guards/roles.guard';
@@ -139,5 +139,26 @@ export class WorkbenchController {
       },
       body.projectId,
     );
+  }
+
+  @Put('projects/:id')
+  @RequirePermissions('config:write')
+  updateProject(
+    @Param('id') id: string,
+    @Body() body: { name?: string; region?: string; manager?: string; phone?: string; status?: string },
+  ) {
+    return this.workbench.updateProject(id, body);
+  }
+
+  @Post('projects/:id/stop')
+  @RequirePermissions('config:write')
+  stopProject(@Param('id') id: string) {
+    return this.workbench.stopProject(id);
+  }
+
+  @Delete('projects/:id')
+  @RequirePermissions('config:write')
+  deleteProject(@Param('id') id: string) {
+    return this.workbench.deleteProject(id);
   }
 }
