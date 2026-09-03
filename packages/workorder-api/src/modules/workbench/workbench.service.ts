@@ -160,6 +160,7 @@ export class WorkbenchService {
     return {
       projects: projects.map((p) =>
         entity(p.id, p.name, [p.region, p.status].filter(Boolean).join(' · '), p.status, {
+          region: p.region ?? '—',
           manager: p.manager ?? '—',
           spaces: spaces.filter((s) => s.projectId === p.id).length || '—',
           users: people.filter((u) => u.memberships.some((m) => m.projectId === p.id)).length,
@@ -793,23 +794,27 @@ export class WorkbenchService {
   }
 
   async queryProjects(filters: { query?: string; status?: string; region?: string }) {
-    const where: any = {};
+    const conditions: any[] = [];
     
     if (filters.query) {
-      where.OR = [
-        { name: { contains: filters.query, mode: 'insensitive' } },
-        { id: { contains: filters.query, mode: 'insensitive' } },
-        { region: { contains: filters.query, mode: 'insensitive' } },
-      ];
+      conditions.push({
+        OR: [
+          { name: { contains: filters.query, mode: 'insensitive' } },
+          { id: { contains: filters.query, mode: 'insensitive' } },
+          { region: { contains: filters.query, mode: 'insensitive' } },
+        ],
+      });
     }
     
     if (filters.status && filters.status !== '全部状态') {
-      where.status = { contains: filters.status };
+      conditions.push({ status: { contains: filters.status } });
     }
     
     if (filters.region && filters.region !== '全部地区') {
-      where.region = { contains: filters.region };
+      conditions.push({ region: { contains: filters.region } });
     }
+    
+    const where = conditions.length > 0 ? { AND: conditions } : {};
     
     const projects = await this.prisma.project.findMany({
       where,
@@ -822,6 +827,7 @@ export class WorkbenchService {
     
     return projects.map((p) =>
       entity(p.id, p.name, [p.region, p.status].filter(Boolean).join(' · '), p.status, {
+        region: p.region ?? '—',
         manager: p.manager ?? '—',
         spaces: spaces.filter((s) => s.projectId === p.id).length || '—',
         phone: p.phone ?? '—',
