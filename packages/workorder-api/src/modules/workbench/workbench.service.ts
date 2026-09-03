@@ -10,7 +10,8 @@ type WorkbenchCommand =
   | { type: 'retry-delivery'; id: string }
   | { type: 'submit-agent-draft'; idempotencyKey: string; projectId?: string }
   | { type: 'publish-agent'; version: string }
-  | { type: 'assign-workorder'; id: string; assignee: string };
+  | { type: 'assign-workorder'; id: string; assignee: string }
+  | { type: 'update-project'; id: string; title: string; values?: Record<string, string | number> };
 
 @Injectable()
 export class WorkbenchService {
@@ -344,7 +345,14 @@ export class WorkbenchService {
       case 'projects': {
         const code = `PRJ-${Date.now().toString().slice(-5)}`;
         const p = await this.prisma.project.create({
-          data: { code, name: title, region: subtitle || null, status: '筹备中', manager: '项目管理员' },
+          data: {
+            code,
+            name: title,
+            region: (input.values?.region as string) || subtitle || null,
+            phone: (input.values?.phone as string) || null,
+            manager: (input.values?.manager as string) || null,
+            status: '筹备中',
+          },
         });
         await this.audit(pid, '已创建项目草稿', p.name);
         break;
@@ -568,6 +576,21 @@ export class WorkbenchService {
         message = `Agent 能力 ${command.version} 已完成发布`;
         break;
       }
+      case 'update-project': {
+        const project = await this.prisma.project.findUnique({ where: { id: command.id } });
+        if (!project) throw new NotFoundException('项目不存在');
+        await this.prisma.project.update({
+          where: { id: command.id },
+          data: {
+            name: command.title,
+            region: (command.values?.region as string) ?? null,
+            phone: (command.values?.phone as string) ?? null,
+            manager: (command.values?.manager as string) ?? null,
+          },
+        });
+        message = `项目 ${command.title} 已更新`;
+        break;
+      }
       default:
         throw new BadRequestException('未知命令');
     }
@@ -767,6 +790,43 @@ export class WorkbenchService {
         data: { status: 'DELIVERED', attempts: { increment: 1 }, errorCode: null },
       });
     }
+  }
+
+  async queryProjects(filters: { query?: string; status?: string; region?: string }) {
+    const where: any = {};
+    
+    if (filters.query) {
+      where.OR = [
+        { name: { contains: filters.query, mode: 'insensitive' } },
+        { id: { contains: filters.query, mode: 'insensitive' } },
+        { region: { contains: filters.query, mode: 'insensitive' } },
+      ];
+    }
+    
+    if (filters.status && filters.status !== '全部状态') {
+      where.status = { contains: filters.status };
+    }
+    
+    if (filters.region && filters.region !== '全部地区') {
+      where.region = { contains: filters.region };
+    }
+    
+    const projects = await this.prisma.project.findMany({
+      where,
+      orderBy: { createdAt: 'asc' },
+    });
+    
+    const spaces = await this.prisma.space.findMany({
+      select: { id: true, projectId: true },
+    });
+    
+    return projects.map((p) =>
+      entity(p.id, p.name, [p.region, p.status].filter(Boolean).join(' · '), p.status, {
+        manager: p.manager ?? '—',
+        spaces: spaces.filter((s) => s.projectId === p.id).length || '—',
+        phone: p.phone ?? '—',
+      }),
+    );
   }
 
   async updateProject(id: string, data: { name?: string; region?: string; manager?: string; phone?: string; status?: string }) {

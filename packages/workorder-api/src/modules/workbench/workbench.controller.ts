@@ -76,8 +76,13 @@ export class WorkbenchController {
   }
 
   @Get('projects')
-  projects(@Query('projectId') projectId?: string) {
-    return this.workbench.bootstrap(projectId).then((s) => s.records.projects);
+  projects(
+    @Query('projectId') projectId?: string,
+    @Query('q') query?: string,
+    @Query('status') status?: string,
+    @Query('region') region?: string,
+  ) {
+    return this.workbench.queryProjects({ query, status, region });
   }
 
   @Get('catalog/:name')
