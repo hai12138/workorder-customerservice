@@ -2,7 +2,7 @@ import shell from './prototype-shell.html?raw'
 import * as P from './adapters/pages.js'
 import { badge } from './adapters/ui.js'
 import { clearSession, getSession, setProjectId } from './store/session.js'
-import { loadBootstrap, refresh, records, getSnapshot } from './store/app-state.js'
+import { loadBootstrap, refresh, records, getSnapshot, setFilteredProjects, clearFilteredProjects } from './store/app-state.js'
 import {
   createRecord,
   publishConfig,
@@ -11,9 +11,8 @@ import {
   putFlow,
   putSlaPolicies,
   assignWorkorder,
-  updateProject,
-  stopProject,
-  deleteProject,
+  runCommand,
+  queryProjects,
 } from './api/workbench.js'
 import { notifyApi } from './api/notify.js'
 import { agentApi } from './api/agent.js'
@@ -27,6 +26,8 @@ if (session?.user) {
     const initial = session.user.name.slice(0, 1)
     userBtn.innerHTML = `<span class="avatar">${initial}</span>${session.user.name} · ${session.user.role || session.user.identity}⌄`
   }
+  const tag = document.querySelector('.prototype-tag')
+  if (tag) tag.textContent = `已连接 API · ${session.user.name}`
 }
 
 const projectSelect = document.getElementById('projectSelect')
@@ -58,19 +59,19 @@ const pages = {
   spaces: ['空间管理', 'WEB-02'],
   people: ['用户与员工管理', 'WEB-03'],
   roles: ['角色权限', 'WEB-04'],
-  config: ['配置总览', 'WEB-06'],
+  config: ['工单配置总览', 'WEB-06'],
   types: ['工单类型', 'WEB-07'],
   fields: ['表单字段', 'WEB-08'],
   flow: ['流程与 SLA', 'WEB-09'],
   dispatch: ['派单规则', 'WEB-10'],
-  notificationCenter: ['通知总览', 'WEB-11'],
+  notificationCenter: ['通知中心', 'WEB-11'],
   notifications: ['通知策略', 'WEB-11A'],
   wechatTemplates: ['微信模板映射', 'WEB-11B'],
   channelBindings: ['用户渠道绑定', 'WEB-11C'],
-  deliveryRecords: ['投递记录', 'WEB-11D'],
+  deliveryRecords: ['通知投递记录', 'WEB-11D'],
   deliveryFailures: ['失败与重试', 'WEB-11E'],
   wechatSettings: ['微信接入配置', 'WEB-11F'],
-  agentOverview: ['接入总览', 'AI-01'],
+  agentOverview: ['Agent 接入总览', 'AI-01'],
   mcpTools: ['MCP 工具目录', 'AI-02'],
   skillPackages: ['Skill 包管理', 'AI-03'],
   agentApps: ['应用与权限', 'AI-04'],
@@ -80,7 +81,7 @@ const pages = {
   publish: ['配置版本与发布', 'WEB-13'],
   messages: ['消息中心', 'WEB-14'],
   workorders: ['工单台账', 'WEB-17'],
-  exceptions: ['异常列表', 'WEB-18'],
+  exceptions: ['异常中心', 'WEB-18'],
 }
 
 function dashboard() {
@@ -210,13 +211,6 @@ function render() {
   document.querySelectorAll('.nav-group').forEach((g) => {
     if (g.querySelector(`[data-page="${current}"]`)) g.classList.add('open')
   })
-  
-  // Hide scopebar on projects page (managing project list itself)
-  const scopebar = document.querySelector('.scopebar')
-  if (scopebar) {
-    scopebar.style.display = current === 'projects' ? 'none' : ''
-  }
-  
   window.scrollTo(0, 0)
 }
 
@@ -281,15 +275,7 @@ function wechatMessagePreview() {
   )
 }
 
-function projectForm(rec) {
-  return `<form id="demoForm"><div class="form-grid"><div class="form-row"><label>* 项目名称</label><input id="f-title" required placeholder="例如：云栖雅苑" value="${rec ? esc(rec.title) : ''}"></div><div class="form-row"><label>地区</label><input id="f-region" placeholder="华东 / 临江市" value="${rec?.values?.region || ''}"></div><div class="form-row"><label>项目管理员</label><input id="f-manager" placeholder="姓名" value="${rec?.values?.manager || ''}"></div><div class="form-row"><label>客服电话</label><input id="f-phone" placeholder="400-xxx-xxxx" value="${rec?.values?.phone || ''}"></div></div></form>`
-}
-
-function esc(str) {
-  const div = document.createElement('div')
-  div.textContent = str
-  return div.innerHTML
-}
+const projectForm = `<form id="demoForm"><div class="form-grid"><div class="form-row"><label>* 项目名称</label><input id="f-title" required placeholder="例如：云栖雅苑"></div><div class="form-row"><label>地区</label><input id="f-region" placeholder="例如：华东 / 临江市"></div><div class="form-row"><label>客服电话</label><input id="f-phone" placeholder="例如：400-123-4567"></div><div class="form-row"><label>项目负责人</label><input id="f-manager" placeholder="例如：张经理"></div></div></form>`
 
 document.addEventListener('click', (e) => {
   const p = e.target.closest('[data-page]')
@@ -314,13 +300,37 @@ async function handleAction(act, a) {
       document.getElementById('portal').innerHTML = ''
       return
     }
-    if (act === 'toast' || act === 'query') {
-      toast(a.dataset.message || '筛选条件已应用')
+    if (act === 'toast') {
+      toast(a.dataset.message || '操作已触发')
+      return
+    }
+    if (act === 'query') {
+      if (current === 'projects') {
+        const keyword = document.getElementById('keyword')?.value?.trim() || ''
+        const statusSelect = document.querySelector('.filters select:nth-of-type(1)')?.value || ''
+        const regionSelect = document.querySelector('.filters select:nth-of-type(2)')?.value || ''
+        try {
+          const projects = await queryProjects(keyword, statusSelect, regionSelect)
+          setFilteredProjects(projects)
+          render()
+          toast(`已加载 ${projects.length} 个项目`)
+        } catch (e) {
+          toast(e.message || '查询失败')
+        }
+      } else {
+        toast('筛选条件已应用')
+      }
       return
     }
     if (act === 'reset-filter') {
       const k = document.getElementById('keyword')
       if (k) k.value = ''
+      const selects = document.querySelectorAll('.filters select')
+      selects.forEach((s) => (s.selectedIndex = 0))
+      if (current === 'projects') {
+        clearFilteredProjects()
+        render()
+      }
       toast('筛选条件已重置')
       return
     }
@@ -378,7 +388,7 @@ async function handleAction(act, a) {
       if (id) {
         await updateProject(id, { name: title, region, manager, phone })
       } else {
-        await createRecord('projects', { title, subtitle: region, values: { manager, phone } })
+        await createRecord('projects', { title, values: { region, manager, phone } })
       }
       await afterWrite(id ? '项目信息已更新' : '项目已创建')
       return
@@ -387,42 +397,10 @@ async function handleAction(act, a) {
       const id = a.dataset.id
       const rec = records('projects').find((x) => x.id === id) || records('projects')[0]
       if (!rec) return toast('未找到项目')
-      const isActive = rec.status && rec.status.includes('服务')
-      const actions = isActive
-        ? `<button class="btn" data-action="project-stop" data-id="${id}">停用项目</button>`
-        : `<button class="btn danger" data-action="project-delete" data-id="${id}">删除项目</button>`
       drawer(
         `${rec.title} · 项目详情`,
-        `<div class="actions">${badge(rec.status, rec.tone || 'ok')}<span class="muted">${rec.id}</span></div><div class="kv" style="margin-top:15px"><div><span>项目编号</span><b>${rec.id}</b></div><div><span>地区</span><b>${rec.values?.region || '—'}</b></div><div><span>管理员</span><b>${rec.values?.manager || '—'}</b></div><div><span>客服电话</span><b>${rec.values?.phone || '—'}</b></div><div><span>空间数</span><b>${rec.values?.spaces ?? '—'}</b></div><div><span>用户数</span><b>${rec.values?.users ?? '—'}</b></div><div><span>服务状态</span><b>${rec.status}</b></div></div><div class="actions" style="margin-top:20px;justify-content:flex-end"><button class="btn" data-action="project-edit" data-id="${id}">编辑项目</button>${actions}</div>`,
+        `<div class="actions">${badge(rec.status, 'ok')}<span class="muted">${rec.id}</span></div><div class="kv" style="margin-top:15px"><div><span>副标题</span><b>${rec.subtitle || '—'}</b></div><div><span>管理员</span><b>${rec.values?.manager || '—'}</b></div><div><span>电话</span><b>${rec.values?.phone || '—'}</b></div><div><span>空间数</span><b>${rec.values?.spaces ?? '—'}</b></div></div>`,
       )
-      return
-    }
-    if (act === 'project-stop') {
-      const id = a.dataset.id
-      const rec = records('projects').find((x) => x.id === id)
-      if (!rec) return toast('未找到项目')
-      modal('停用项目', `<div class="health"><b>确认停用「${esc(rec.title)}」？</b><p class="sub">停用后项目将不再接受新工单，现有工单可继续处理。</p></div>`, `<button class="btn" data-action="close">取消</button><button class="btn danger" data-action="confirm-project-stop" data-id="${id}">确认停用</button>`)
-      return
-    }
-    if (act === 'confirm-project-stop') {
-      await stopProject(a.dataset.id)
-      await afterWrite('项目已停用')
-      return
-    }
-    if (act === 'project-delete') {
-      const id = a.dataset.id
-      const rec = records('projects').find((x) => x.id === id)
-      if (!rec) return toast('未找到项目')
-      modal('删除项目', `<div class="health"><b>确认删除「${esc(rec.title)}」？</b><p class="sub">删除操作不可恢复。如项目有关联数据，系统将拒绝删除。</p></div>`, `<button class="btn" data-action="close">取消</button><button class="btn danger" data-action="confirm-project-delete" data-id="${id}">确认删除</button>`)
-      return
-    }
-    if (act === 'confirm-project-delete') {
-      try {
-        await deleteProject(a.dataset.id)
-        await afterWrite('项目已删除')
-      } catch (err) {
-        toast(err?.message || '删除失败')
-      }
       return
     }
     if (act === 'new-space') {
@@ -669,8 +647,34 @@ async function handleAction(act, a) {
       toast(result?.message || '联调通过：沙箱工单已创建')
       return
     }
+    if (act === 'export-projects') {
+      const list = records('projects')
+      const headers = ['项目名称', '项目编号', '地区', '客服电话', '项目负责人', '服务状态']
+      const rows = list.map((p) => [
+        p.title,
+        p.id,
+        p.values?.region || '',
+        p.values?.phone || '',
+        p.values?.manager || '',
+        p.status,
+      ])
+      const csv = [headers, ...rows].map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n')
+      const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `项目列表_${new Date().toISOString().slice(0, 10)}.csv`
+      link.click()
+      URL.revokeObjectURL(url)
+      toast('项目列表已导出')
+      return
+    }
     if (act === 'download-skill' || act === 'reset-agent-demo') {
       toast(act === 'download-skill' ? 'Skill 包导出为演示操作' : '联调会话已重置')
+      return
+    }
+    if (act === 'confirm-disable') {
+      modal('停用项目', `<p>停用为受控操作；当前仅演示确认框。</p>`, `<button class="btn" data-action="close">取消</button><button class="btn danger" data-action="close">确认停用（演示）</button>`)
       return
     }
     if (act === 'variant-prev' || act === 'variant-next') {

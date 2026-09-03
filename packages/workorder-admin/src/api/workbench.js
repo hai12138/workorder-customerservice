@@ -98,3 +98,12 @@ export async function deleteProject(id) {
     method: 'DELETE',
   })
 }
+
+export async function queryProjects(query, status, region, projectId) {
+  const params = new URLSearchParams()
+  if (projectId) params.set('projectId', projectId)
+  if (query) params.set('q', query)
+  if (status && status !== '全部状态') params.set('status', status)
+  if (region && region !== '全部地区') params.set('region', region)
+  return api(`/projects?${params.toString()}`)
+}

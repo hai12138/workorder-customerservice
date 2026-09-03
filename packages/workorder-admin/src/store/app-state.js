@@ -6,13 +6,25 @@ import { getProjectId, setProjectId } from './session.js'
 /** @type {import('../api/workbench.js') extends never ? any : any} */
 let snapshot = null
 let loading = null
+let filteredProjects = null
 
 export function getSnapshot() {
   return snapshot
 }
 
 export function records(name) {
+  if (name === 'projects' && filteredProjects !== null) {
+    return filteredProjects
+  }
   return snapshot?.records?.[name] ?? []
+}
+
+export function setFilteredProjects(projects) {
+  filteredProjects = projects
+}
+
+export function clearFilteredProjects() {
+  filteredProjects = null
 }
 
 export function projectId() {
