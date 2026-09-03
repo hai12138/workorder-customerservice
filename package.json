@@ -1,0 +1,19 @@
+{
+  "name": "workorder-customerservice",
+  "private": true,
+  "scripts": {
+    "dev:api": "pnpm --filter workorder-api dev",
+    "dev:mcp": "pnpm --filter workorder-mcp dev",
+    "dev:admin": "pnpm --filter workorder-admin dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "test:e2e": "pnpm --filter workorder-api test:e2e",
+    "db:migrate": "pnpm --filter workorder-api exec prisma db push",
+    "db:seed": "pnpm --filter workorder-api prisma db seed",
+    "db:generate": "pnpm --filter workorder-api prisma generate"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@9.15.0"
+}

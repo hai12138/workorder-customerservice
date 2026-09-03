@@ -1,0 +1,11 @@
+import fs from 'fs';
+const t = fs.readFileSync('D:/project/workorder-customerservice/probe/assets_order.D_OWjHNJ.js','utf8');
+const apis = new Set();
+let m; const re=/["'`](\/[^"'`]{2,120})["'`]/g;
+while((m=re.exec(t))) if(/order|flow|job|application|work|property|space|dispatch|notif|sla|type|field|plan|exception/i.test(m[1])) apis.add(m[1]);
+console.log([...apis].sort().join('\n'));
+console.log('---');
+const labels=new Set();
+const lr=/["']([\u4e00-\u9fff][^"'`]{0,30})["']/g;
+while((m=lr.exec(t))) labels.add(m[1]);
+console.log([...labels].join(' | '));

@@ -1,0 +1,43 @@
+<header class="topbar">
+    <div class="brand">Astra Service OS</div>
+    <button class="product-pill"><span class="mini">▤</span>物业服务</button>
+    <div class="top-actions">
+      <button class="icon-btn hide-mobile" data-action="more" title="更多">•••</button>
+      <button class="icon-btn" data-action="search-menu" title="菜单搜索">⌕</button>
+      <button class="icon-btn hide-mobile" data-action="toast" data-message="当前没有待办任务" title="待办">◉<span class="dot">0</span></button>
+      <button class="icon-btn hide-mobile" data-page="messages" title="消息">♧</button>
+      <button class="user-btn" data-action="user-menu"><span class="avatar">演</span>演示用户 demo_staff⌄</button>
+    </div>
+  </header>
+  <aside class="sidebar" id="sidebar">
+    <button class="nav-item" data-page="dashboard"><span class="nav-icon">◉</span><span>运营总览</span></button>
+    <div class="nav-group open">
+      <button class="nav-group-title"><span class="nav-icon">▦</span><span>基础配置</span><span class="chev">›</span></button>
+      <div class="nav-children">
+        <button class="nav-item" data-page="projects"><span>项目管理</span></button>
+        <button class="nav-item" data-page="spaces"><span>空间管理</span></button>
+        <button class="nav-item" data-page="people"><span>用户与员工管理</span></button>
+        <button class="nav-item" data-page="roles"><span>角色权限</span></button>
+      </div>
+    </div>
+    <div class="nav-group">
+      <button class="nav-group-title"><span class="nav-icon">⚙</span><span>工单配置</span><span class="chev">›</span></button>
+      <div class="nav-children">
+        <button class="nav-item" data-page="config"><span>配置总览</span></button>
+        <button class="nav-item" data-page="types"><span>工单类型</span></button>
+        <button class="nav-item" data-page="fields"><span>表单字段</span></button>
+        <button class="nav-item" data-page="flow"><span>流程与 SLA</span></button>
+        <button class="nav-item" data-page="dispatch"><span>派单规则</span></button>
+        <button class="nav-item" data-page="plans"><span>计划工单</span></button>
+        <button class="nav-item" data-page="publish"><span>配置版本与发布</span></button>
+      </div>
+    </div>
+    <div class="nav-group"><button class="nav-group-title"><span class="nav-icon">◌</span><span>通知中心</span><span class="chev">›</span></button><div class="nav-children"><button class="nav-item" data-page="notificationCenter"><span>通知总览</span></button><button class="nav-item" data-page="notifications"><span>通知策略</span></button><button class="nav-item" data-page="wechatTemplates"><span>微信模板映射</span></button><button class="nav-item" data-page="channelBindings"><span>用户渠道绑定</span></button><button class="nav-item" data-page="deliveryRecords"><span>投递记录</span></button><button class="nav-item" data-page="deliveryFailures"><span>失败与重试</span></button><button class="nav-item" data-page="wechatSettings"><span>微信接入配置</span></button></div></div>
+    <div class="nav-group"><button class="nav-group-title"><span class="nav-icon">◇</span><span>Agent 接入</span><span class="chev">›</span></button><div class="nav-children"><button class="nav-item" data-page="agentOverview"><span>接入总览</span></button><button class="nav-item" data-page="mcpTools"><span>MCP 工具目录</span></button><button class="nav-item" data-page="skillPackages"><span>Skill 包管理</span></button><button class="nav-item" data-page="agentApps"><span>应用与权限</span></button><button class="nav-item" data-page="agentPlayground"><span>联调测试台</span></button><button class="nav-item" data-page="agentLogs"><span>调用日志</span></button></div></div>
+    <div class="nav-group"><button class="nav-group-title"><span class="nav-icon">♧</span><span>消息通知</span><span class="chev">›</span></button><div class="nav-children"><button class="nav-item" data-page="messages"><span>消息中心</span></button></div></div>
+    <div class="nav-group"><button class="nav-group-title"><span class="nav-icon">▤</span><span>工单管理</span><span class="chev">›</span></button><div class="nav-children"><button class="nav-item" data-page="workorders"><span>工单台账</span></button></div></div>
+    <div class="nav-group"><button class="nav-group-title"><span class="nav-icon">⊙</span><span>异常中心</span><span class="chev">›</span></button><div class="nav-children"><button class="nav-item" data-page="exceptions"><span>异常列表</span></button></div></div>
+  </aside>
+  <div class="prototype-tag">本地演示原型 · 数据均为虚构</div>
+  <main class="shell"><div class="tab-strip"><div class="tab" id="tabTitle">运营总览 <span>×</span></div></div><div class="content"><div class="scopebar"><span>当前项目</span><select id="projectSelect"><option>星澜花园 · 服务中</option><option>云栖雅苑 · 未启用</option></select></div><section class="page" id="page"></section></div></main>
+  <div id="portal"></div>

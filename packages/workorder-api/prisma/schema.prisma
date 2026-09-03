@@ -1,0 +1,533 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id        String   @id @default("default")
+  name      String   @default("默认租户")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("tenants")
+}
+
+model User {
+  id           String   @id
+  tenantId     String   @default("default") @map("tenant_id")
+  name         String
+  phone        String?
+  passwordHash String   @default("dev") @map("password_hash")
+  identity     String   @default("员工") // 业主/租户/物管人员/管理员
+  status       String   @default("有效")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  roles            UserRole[]
+  memberships      ProjectMember[]
+  teamMembers      TeamMember[]
+  channelBindings  ChannelBinding[]
+  assignedOrders   WorkOrder[]      @relation("Assignee")
+  createdOrders    WorkOrder[]      @relation("Creator")
+  messages         InboxMessage[]
+
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  tenantId    String   @default("default") @map("tenant_id")
+  code        String
+  name        String
+  scope       String   @default("本项目")
+  permissions Json     @default("[]")
+  status      String   @default("启用")
+  createdAt   DateTime @default(now()) @map("created_at")
+  users       UserRole[]
+
+  @@unique([tenantId, code])
+  @@map("roles")
+}
+
+model UserRole {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+  roleId String @map("role_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+model Project {
+  id        String   @id @default(cuid())
+  tenantId  String   @default("default") @map("tenant_id")
+  code      String
+  name      String
+  region    String?
+  manager   String?
+  phone     String?
+  status    String   @default("服务中")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  spaces      Space[]
+  members     ProjectMember[]
+  teams       Team[]
+  configs     ConfigVersion[]
+  workOrders  WorkOrder[]
+  plans       WorkPlan[]
+  messages    InboxMessage[]
+  exceptions  WorkOrderException[]
+  policies    NotifyPolicy[]
+  templates   WechatTemplateMap[]
+  bindings    ChannelBinding[]
+  deliveries  Delivery[]
+  wechat      WechatIntegration?
+  agentApps   AgentApp[]
+  activities  ActivityLog[]
+
+  @@unique([tenantId, code])
+  @@map("projects")
+}
+
+model ProjectMember {
+  id        String @id @default(cuid())
+  projectId String @map("project_id")
+  userId    String @map("user_id")
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@map("project_members")
+}
+
+model Space {
+  id        String   @id @default(cuid())
+  projectId String   @map("project_id")
+  parentId  String?  @map("parent_id")
+  name      String
+  type      String   @default("楼栋")
+  status    String   @default("有效")
+  createdAt DateTime @default(now()) @map("created_at")
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent    Space?   @relation("SpaceTree", fields: [parentId], references: [id])
+  children  Space[]  @relation("SpaceTree")
+
+  @@map("spaces")
+}
+
+model Team {
+  id        String   @id @default(cuid())
+  projectId String   @map("project_id")
+  code      String
+  name      String
+  status    String   @default("启用")
+  createdAt DateTime @default(now()) @map("created_at")
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  members   TeamMember[]
+
+  @@unique([projectId, code])
+  @@map("teams")
+}
+
+model TeamMember {
+  id     String @id @default(cuid())
+  teamId String @map("team_id")
+  userId String @map("user_id")
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@map("team_members")
+}
+
+model ConfigVersion {
+  id          String    @id @default(cuid())
+  projectId   String    @map("project_id")
+  label       String
+  status      String    @default("draft") // draft | published | archived
+  publishedAt DateTime? @map("published_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  orderTypes    OrderType[]
+  formFields    FormField[]
+  flows         FlowDefinition[]
+  slaPolicies   SlaPolicy[]
+  dispatchRules DispatchRule[]
+
+  @@map("config_versions")
+}
+
+model OrderType {
+  id              String        @id @default(cuid())
+  configVersionId String        @map("config_version_id")
+  code            String
+  name            String
+  channels        String        @default("移动端 / Web")
+  priority        String        @default("中")
+  defaultFlowKey  String        @default("standard") @map("default_flow_key")
+  status          String        @default("已启用")
+  sort            Int           @default(0)
+  configVersion   ConfigVersion @relation(fields: [configVersionId], references: [id], onDelete: Cascade)
+  fields          FormField[]
+
+  @@unique([configVersionId, code])
+  @@map("order_types")
+}
+
+model FormField {
+  id              String        @id @default(cuid())
+  configVersionId String        @map("config_version_id")
+  orderTypeId     String?       @map("order_type_id")
+  code            String
+  label           String
+  fieldType       String        @default("text") @map("field_type")
+  required        Boolean       @default(true)
+  visible         String        @default("用户 / 员工 / Web")
+  privacy         String        @default("普通")
+  status          String        @default("必填")
+  sort            Int           @default(0)
+  configVersion   ConfigVersion @relation(fields: [configVersionId], references: [id], onDelete: Cascade)
+  orderType       OrderType?    @relation(fields: [orderTypeId], references: [id], onDelete: Cascade)
+
+  @@map("form_fields")
+}
+
+model FlowDefinition {
+  id              String        @id @default(cuid())
+  configVersionId String        @map("config_version_id")
+  flowKey         String        @map("flow_key")
+  name            String
+  definition      Json          @default("{}")
+  version         Int           @default(1)
+  configVersion   ConfigVersion @relation(fields: [configVersionId], references: [id], onDelete: Cascade)
+
+  @@unique([configVersionId, flowKey])
+  @@map("flow_definitions")
+}
+
+model SlaPolicy {
+  id              String        @id @default(cuid())
+  configVersionId String        @map("config_version_id")
+  typeCode        String        @map("type_code")
+  nodeKey         String?       @map("node_key")
+  timeoutHours    Int           @default(24) @map("timeout_hours")
+  escalationAction String       @default("EXCEPTION") @map("escalation_action")
+  configVersion   ConfigVersion @relation(fields: [configVersionId], references: [id], onDelete: Cascade)
+
+  @@map("sla_policies")
+}
+
+model DispatchRule {
+  id              String        @id @default(cuid())
+  configVersionId String        @map("config_version_id")
+  name            String
+  typeCode        String?       @map("type_code")
+  scope           String        @default("全项目")
+  roleName        String?       @map("role_name")
+  teamName        String?       @map("team_name")
+  candidates      Int           @default(0)
+  status          String        @default("已启用")
+  configVersion   ConfigVersion @relation(fields: [configVersionId], references: [id], onDelete: Cascade)
+
+  @@map("dispatch_rules")
+}
+
+model WorkPlan {
+  id              String    @id @default(cuid())
+  projectId       String    @map("project_id")
+  code            String
+  name            String
+  scheduleRule    String    @map("schedule_rule")
+  typeName        String    @map("type_name")
+  assigneeTeam    String?   @map("assignee_team")
+  nextTriggerTime DateTime? @map("next_trigger_time")
+  status          String    @default("已启用")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, code])
+  @@map("work_plans")
+}
+
+model WorkOrder {
+  id           String    @id @default(cuid())
+  projectId    String    @map("project_id")
+  workorderNo  String    @unique @map("workorder_no")
+  typeCode     String    @map("type_code")
+  typeName     String    @map("type_name")
+  title        String
+  description  String?
+  spaceLabel   String?   @map("space_label")
+  status       String    @default("待分派")
+  slaLabel     String?   @map("sla_label")
+  formData     Json      @default("{}") @map("form_data")
+  creatorId    String?   @map("creator_id")
+  assigneeId   String?   @map("assignee_id")
+  assigneeName String?   @map("assignee_name")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  project    Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator    User?                @relation("Creator", fields: [creatorId], references: [id])
+  assignee   User?                @relation("Assignee", fields: [assigneeId], references: [id])
+  tasks      WorkOrderTask[]
+  events     WorkOrderEvent[]
+  exceptions WorkOrderException[]
+  timers     SlaTimer[]
+
+  @@map("work_orders")
+}
+
+model WorkOrderTask {
+  id           String   @id @default(cuid())
+  workOrderId  String   @map("work_order_id")
+  nodeKey      String   @map("node_key")
+  nodeName     String   @map("node_name")
+  status       String   @default("PENDING")
+  assigneeId   String?  @map("assignee_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  workOrder    WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  @@map("work_order_tasks")
+}
+
+model WorkOrderEvent {
+  id          String   @id @default(cuid())
+  workOrderId String   @map("work_order_id")
+  action      String
+  detail      String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  @@map("work_order_events")
+}
+
+model WorkOrderException {
+  id          String   @id @default(cuid())
+  projectId   String   @map("project_id")
+  workOrderId String?  @map("work_order_id")
+  category    String
+  impact      String?
+  owner       String?
+  message     String?
+  status      String   @default("待处理")
+  createdAt   DateTime @default(now()) @map("created_at")
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+
+  @@map("work_order_exceptions")
+}
+
+model SlaTimer {
+  id          String    @id @default(cuid())
+  workOrderId String    @map("work_order_id")
+  dueAt       DateTime  @map("due_at")
+  status      String    @default("OPEN")
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  @@map("sla_timers")
+}
+
+model InboxMessage {
+  id        String   @id @default(cuid())
+  projectId String   @map("project_id")
+  userId    String?  @map("user_id")
+  title     String
+  refNo     String?  @map("ref_no")
+  sender    String   @default("通知中心")
+  channel   String   @default("站内")
+  status    String   @default("未读")
+  createdAt DateTime @default(now()) @map("created_at")
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("inbox_messages")
+}
+
+model NotifyPolicy {
+  id        String   @id @default(cuid())
+  projectId String   @map("project_id")
+  name      String
+  event     String
+  recipient String
+  channel   String   @default("微信 + 站内")
+  cadence   String   @default("立即")
+  status    String   @default("已启用")
+  createdAt DateTime @default(now()) @map("created_at")
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("notify_policies")
+}
+
+model WechatTemplateMap {
+  id           String   @id @default(cuid())
+  projectId    String   @map("project_id")
+  name         String
+  event        String
+  templateName String   @map("template_name")
+  fieldCount   Int      @default(4) @map("field_count")
+  h5Path       String   @map("h5_path")
+  status       String   @default("已映射")
+  createdAt    DateTime @default(now()) @map("created_at")
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("wechat_template_maps")
+}
+
+model ChannelBinding {
+  id        String   @id @default(cuid())
+  projectId String   @map("project_id")
+  userId    String   @map("user_id")
+  channel   String   @default("微信服务号")
+  openId    String   @map("open_id")
+  status    String   @default("已绑定")
+  verifiedAt DateTime? @map("verified_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId, channel])
+  @@map("channel_bindings")
+}
+
+model Delivery {
+  id          String   @id @default(cuid())
+  projectId   String   @map("project_id")
+  event       String
+  title       String
+  refLabel    String?  @map("ref_label")
+  recipient   String
+  channel     String   @default("微信")
+  status      String   @default("PENDING") // DELIVERED | RETRYABLE | FAILED | PENDING | RETRYING
+  errorCode   String?  @map("error_code")
+  attempts    Int      @default(0)
+  nextRetryAt DateTime? @map("next_retry_at")
+  impact      String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  attemptsLog DeliveryAttempt[]
+
+  @@map("deliveries")
+}
+
+model DeliveryAttempt {
+  id         String   @id @default(cuid())
+  deliveryId String   @map("delivery_id")
+  status     String
+  detail     String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  delivery   Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+
+  @@map("delivery_attempts")
+}
+
+model WechatIntegration {
+  id        String   @id @default(cuid())
+  projectId String   @unique @map("project_id")
+  appId     String?  @map("app_id")
+  appSecret String?  @map("app_secret")
+  status    String   @default("未配置")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("wechat_integrations")
+}
+
+model McpTool {
+  id        String   @id @default(cuid())
+  tenantId  String   @default("default") @map("tenant_id")
+  code      String
+  name      String
+  kind      String   @default("查询")
+  purpose   String
+  scope     String
+  approval  String   @default("否")
+  status    String   @default("已启用")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([tenantId, code])
+  @@map("mcp_tools")
+}
+
+model SkillPackage {
+  id        String   @id @default(cuid())
+  tenantId  String   @default("default") @map("tenant_id")
+  name      String
+  version   String
+  mcpCompat String   @map("mcp_compat")
+  configCompat String @map("config_compat")
+  evals     String   @default("0 / 0")
+  status    String   @default("草稿")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([tenantId, name, version])
+  @@map("skill_packages")
+}
+
+model AgentApp {
+  id         String   @id @default(cuid())
+  projectId  String?  @map("project_id")
+  code       String
+  name       String
+  env        String   @default("测试")
+  identity   String
+  projects   String
+  rateLimit  String   @map("rate_limit")
+  status     String   @default("已启用")
+  lastCallAt DateTime? @map("last_call_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  project    Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  logs       AgentCallLog[]
+
+  @@unique([code])
+  @@map("agent_apps")
+}
+
+model AgentCallLog {
+  id        String   @id @default(cuid())
+  appId     String?  @map("app_id")
+  toolName  String   @map("tool_name")
+  actor     String
+  durationMs Int     @map("duration_ms")
+  status    String
+  audit     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  app       AgentApp? @relation(fields: [appId], references: [id], onDelete: SetNull)
+
+  @@map("agent_call_logs")
+}
+
+model AgentCapabilityRelease {
+  id        String   @id @default(cuid())
+  tenantId  String   @default("default") @map("tenant_id")
+  version   String
+  status    String   @default("已发布")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("agent_capability_releases")
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  projectId String?  @map("project_id")
+  title     String
+  detail    String?
+  tone      String   @default("ok")
+  createdAt DateTime @default(now()) @map("created_at")
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@map("activity_logs")
+}
+
+model IdempotencyKey {
+  id        String   @id
+  result    Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("idempotency_keys")
+}

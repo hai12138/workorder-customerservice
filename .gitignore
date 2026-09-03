@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+*.log
+.DS_Store
+coverage/
+.turbo/
+probe/out/
+out/
+.tmp-prototype/
+.tmp-prototype-parity/

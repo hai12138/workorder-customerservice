@@ -1,0 +1,1 @@
+var a={START:"start",SERIAL:"serial",PARALLEL:"parallel",END:"end",LINK:"link"},l={CHILD_FLOW:"child_flow",VIRTUAL:"virtual",JOB:"job"},L={X_LANE:"x_lane",Y_LANE:"y_lane"};export{l as n,L as r,a as t};
