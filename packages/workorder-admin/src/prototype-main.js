@@ -24,8 +24,6 @@ if (session?.user) {
     const initial = session.user.name.slice(0, 1)
     userBtn.innerHTML = `<span class="avatar">${initial}</span>${session.user.name} · ${session.user.role || session.user.identity}⌄`
   }
-  const tag = document.querySelector('.prototype-tag')
-  if (tag) tag.textContent = `已连接 API · ${session.user.name}`
 }
 
 const projectSelect = document.getElementById('projectSelect')
@@ -57,19 +55,19 @@ const pages = {
   spaces: ['空间管理', 'WEB-02'],
   people: ['用户与员工管理', 'WEB-03'],
   roles: ['角色权限', 'WEB-04'],
-  config: ['工单配置总览', 'WEB-06'],
+  config: ['配置总览', 'WEB-06'],
   types: ['工单类型', 'WEB-07'],
   fields: ['表单字段', 'WEB-08'],
   flow: ['流程与 SLA', 'WEB-09'],
   dispatch: ['派单规则', 'WEB-10'],
-  notificationCenter: ['通知中心', 'WEB-11'],
+  notificationCenter: ['通知总览', 'WEB-11'],
   notifications: ['通知策略', 'WEB-11A'],
   wechatTemplates: ['微信模板映射', 'WEB-11B'],
   channelBindings: ['用户渠道绑定', 'WEB-11C'],
-  deliveryRecords: ['通知投递记录', 'WEB-11D'],
+  deliveryRecords: ['投递记录', 'WEB-11D'],
   deliveryFailures: ['失败与重试', 'WEB-11E'],
   wechatSettings: ['微信接入配置', 'WEB-11F'],
-  agentOverview: ['Agent 接入总览', 'AI-01'],
+  agentOverview: ['接入总览', 'AI-01'],
   mcpTools: ['MCP 工具目录', 'AI-02'],
   skillPackages: ['Skill 包管理', 'AI-03'],
   agentApps: ['应用与权限', 'AI-04'],
@@ -79,7 +77,7 @@ const pages = {
   publish: ['配置版本与发布', 'WEB-13'],
   messages: ['消息中心', 'WEB-14'],
   workorders: ['工单台账', 'WEB-17'],
-  exceptions: ['异常中心', 'WEB-18'],
+  exceptions: ['异常列表', 'WEB-18'],
 }
 
 function dashboard() {

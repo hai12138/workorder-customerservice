@@ -206,7 +206,7 @@ export function config() {
     ['版本记录', '线上 / 草稿', '正常', 'publish'],
   ]
   return (
-    head('工单配置总览', 'WEB-06', `项目 ${esc(projectId())}`, btn('运行发布校验') + `<button class="btn primary" data-page="publish">进入发布</button>`) +
+    head('配置总览', 'WEB-06', `项目 ${esc(projectId())}`, btn('运行发布校验') + `<button class="btn primary" data-page="publish">进入发布</button>`) +
     metricCards([
       { label: '工单类型', value: String(types), detail: '当前配置', tone: 'info' },
       { label: '表单字段', value: String(fields), detail: '当前配置', tone: 'info' },
@@ -302,7 +302,7 @@ export function notificationCenter() {
   const failures = records('failures').length
   const deliveries = records('deliveries').length
   return (
-    head('通知中心', 'WEB-11', '工单事件驱动 · Simulator 渠道', `<button class="btn" data-action="refresh-bootstrap">刷新状态</button><button class="btn primary" data-action="simulate-notification">联调测试</button>`) +
+    head('通知总览', 'WEB-11', '工单事件驱动 · Simulator 渠道', `<button class="btn" data-action="refresh-bootstrap">刷新状态</button><button class="btn primary" data-action="simulate-notification">联调测试</button>`) +
     `<div class="notify-hero"><section class="hero-main"><div class="section-kicker">NOTIFICATION CONTROL</div><h2>业务待办与渠道触达分离运行</h2><p>策略 ${policies} · 投递 ${deliveries} · 失败 ${failures}</p><div class="actions" style="margin-top:18px"><button class="btn primary" data-page="notifications">管理策略</button><button class="btn" data-page="deliveryRecords">查看投递记录</button></div></section><aside class="hero-status"><span class="muted">失败待处理</span><strong>${failures}</strong><span>Simulator 渠道</span></aside></div>` +
     `<div class="notify-grid"><article class="notify-card"><div class="notify-icon">⌁</div><h3>通知策略</h3><p>${policies} 条</p><button class="text-btn card-link" data-page="notifications">管理策略 →</button></article><article class="notify-card"><div class="notify-icon">微</div><h3>微信模板</h3><p>${records('templates').length} 个映射</p><button class="text-btn card-link" data-page="wechatTemplates">查看映射 →</button></article><article class="notify-card"><div class="notify-icon">人</div><h3>渠道绑定</h3><p>${records('bindings').length} 条</p><button class="text-btn card-link" data-page="channelBindings">治理身份 →</button></article><article class="notify-card"><div class="notify-icon">↗</div><h3>投递记录</h3><p>${deliveries} 条</p><button class="text-btn card-link" data-page="deliveryRecords">查看台账 →</button></article><article class="notify-card"><div class="notify-icon">!</div><h3>失败与重试</h3><p>${failures} 条</p><button class="text-btn card-link" data-page="deliveryFailures">处理异常 →</button></article><article class="notify-card"><div class="notify-icon">⚙</div><h3>微信接入</h3><p>Simulator</p><button class="text-btn card-link" data-page="wechatSettings">接入设置 →</button></article></div>`
   )
@@ -380,7 +380,7 @@ export function deliveryRecords() {
     `<button class="text-btn" data-action="delivery-detail" data-id="${esc(d.id)}">详情</button>`,
   ])
   return (
-    head('通知投递记录', 'WEB-11D', '接口受理不等于最终送达', btn('导出记录') + btn('刷新回执', 'refresh-bootstrap')) +
+    head('投递记录', 'WEB-11D', '接口受理不等于最终送达', btn('导出记录') + btn('刷新回执', 'refresh-bootstrap')) +
     metricCards([
       { label: '投递记录', value: String(list.length), detail: '当前项目', tone: 'info' },
       { label: '成功', value: String(list.filter((d) => /DELIVER|成功|ok/i.test(d.status)).length), detail: '—', tone: 'ok' },
@@ -424,7 +424,7 @@ export function agentOverview() {
   const apps = records('apps').length
   const logs = records('logs').length
   return (
-    head('Agent 接入总览', 'AI-01', '工单系统为业务数据真源', `<button class="btn" data-page="agentPlayground">开始联调</button><button class="btn primary" data-action="publish-agent-capability">发布 Agent 能力</button>`) +
+    head('接入总览', 'AI-01', '工单系统为业务数据真源', `<button class="btn" data-page="agentPlayground">开始联调</button><button class="btn primary" data-action="publish-agent-capability">发布 Agent 能力</button>`) +
     `<div class="agent-hero"><section class="agent-hero-main"><div class="section-kicker">WORK ORDER AGENT GATEWAY</div><h2>让 H5 Agent 安全调用工单能力</h2><p>工具 ${tools} · 应用 ${apps} · 今日日志 ${logs}</p></section><aside class="agent-hero-side"><div><small>MCP 工具</small><strong style="display:block">${tools}</strong></div></aside></div>` +
     metricCards([
       { label: 'MCP 工具', value: String(tools), detail: '已启用目录', tone: 'ok' },
@@ -568,7 +568,7 @@ export function exceptions() {
     `<button class="text-btn" data-action="toast">处理</button>`,
   ])
   return (
-    head('异常中心', 'WEB-18', 'SLA / 派单 / 通知异常', btn('刷新', 'refresh-bootstrap')) +
+    head('异常列表', 'WEB-18', 'SLA / 派单 / 通知异常', btn('刷新', 'refresh-bootstrap')) +
     (list.length
       ? table(['编号', '异常', '关联', '状态', '操作'], rows) + footer(`${list.length} 条`)
       : `<div class="empty"><div class="ico">◎</div><strong>暂无异常</strong><span>当前项目没有未处理异常。</span></div>`)
