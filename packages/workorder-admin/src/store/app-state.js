@@ -7,6 +7,7 @@ import { getProjectId, setProjectId } from './session.js'
 let snapshot = null
 let loading = null
 let filteredProjects = null
+let projectsFilterState = { keyword: '', status: '', region: '' }
 
 export function getSnapshot() {
   return snapshot
@@ -25,6 +26,18 @@ export function setFilteredProjects(projects) {
 
 export function clearFilteredProjects() {
   filteredProjects = null
+}
+
+export function getProjectsFilterState() {
+  return projectsFilterState
+}
+
+export function setProjectsFilterState(keyword, status, region) {
+  projectsFilterState = { keyword, status, region }
+}
+
+export function clearProjectsFilterState() {
+  projectsFilterState = { keyword: '', status: '', region: '' }
 }
 
 export function projectId() {
