@@ -475,6 +475,7 @@ function initCascader(id, requireDistrict = true) {
       hoverProvince = value
       hoverCity = ''
       updateDisplay()
+      renderPanel(hoverProvince, '')
     } else if (level === 'city') {
       if (hoverProvince) {
         selectedProvince = hoverProvince
@@ -483,6 +484,7 @@ function initCascader(id, requireDistrict = true) {
       selectedDistrict = ''
       hoverCity = value
       updateDisplay()
+      renderPanel(hoverProvince || selectedProvince, hoverCity)
     } else if (level === 'district') {
       if (hoverProvince) {
         selectedProvince = hoverProvince
