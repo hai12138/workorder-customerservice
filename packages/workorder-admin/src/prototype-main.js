@@ -216,7 +216,9 @@ function render() {
   
   // Hide scopebar on projects page (managing project list itself)
   const scopebar = document.querySelector('.scopebar')
+  const pageEl = document.getElementById('page')
   if (scopebar) scopebar.style.display = current === 'projects' ? 'none' : ''
+  if (pageEl) pageEl.classList.toggle('full-radius', current === 'projects')
   
   // Initialize project filters if on projects page
   if (current === 'projects') {
