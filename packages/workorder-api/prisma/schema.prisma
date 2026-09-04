@@ -111,16 +111,16 @@ model ProjectMember {
 }
 
 enum SpaceType {
-  BUILDING @map("楼栋")
-  FLOOR    @map("楼层")
-  ROOM     @map("房间")
-  PUBLIC   @map("公区")
-  PARKING  @map("车位")
+  BUILDING
+  FLOOR
+  ROOM
+  PUBLIC
+  PARKING
 }
 
 enum SpaceStatus {
-  AVAILABLE @map("可用")
-  DISABLED  @map("停用")
+  AVAILABLE
+  DISABLED
 }
 
 model Space {
