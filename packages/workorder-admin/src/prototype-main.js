@@ -440,19 +440,11 @@ function initCascader(id, requireDistrict = true) {
       selectedDistrict = ''
       renderPanel()
       updateDisplay()
-      if (!requireDistrict) {
-        // For filters, allow selecting just province
-        setTimeout(() => closePanel(), 150)
-      }
     } else if (level === 'city') {
       selectedCity = value
       selectedDistrict = ''
       renderPanel()
       updateDisplay()
-      if (!requireDistrict) {
-        // For filters, allow selecting just city
-        setTimeout(() => closePanel(), 150)
-      }
     } else if (level === 'district') {
       selectedDistrict = value
       updateDisplay()
