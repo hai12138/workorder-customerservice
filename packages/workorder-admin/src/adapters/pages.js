@@ -1,7 +1,7 @@
 /**
  * Live page renderers — DOM class names stay identical to the approved prototype.
  */
-import { records, dashboard as dashboardState, activities, projectId } from '../store/app-state.js'
+import { records, dashboard as dashboardState, activities, projectId, getProjectsFilterState } from '../store/app-state.js'
 import { badge, btn, head, filters, table, footer, esc, toneBadge } from './ui.js'
 
 function metricCards(items) {
@@ -87,7 +87,12 @@ export function projects() {
       `<div class="row-actions"><button class="text-btn" data-action="project-detail" data-id="${esc(p.id)}">详情</button><button class="text-btn" data-action="project-edit" data-id="${esc(p.id)}">编辑</button></div>`,
     ],
   )
-  const projectFilters = `<div class="filters"><input id="keyword" placeholder="搜索项目名称或编号"><select><option>全部状态</option><option>服务中</option><option>筹备中</option><option>未启用</option><option>已停用</option></select><select><option>全部地区</option><option>华东</option><option>华南</option><option>华北</option></select><button class="btn primary" data-action="query">查询</button><button class="btn" data-action="reset-filter">重置</button></div>`
+  const filterState = getProjectsFilterState()
+  const statusOptions = ['全部状态', '服务中', '筹备中', '未启用', '已停用']
+  const regionOptions = ['全部地区', '华东', '华南', '华北']
+  const statusSelect = statusOptions.map((opt) => `<option${filterState.status === opt ? ' selected' : ''}>${opt}</option>`).join('')
+  const regionSelect = regionOptions.map((opt) => `<option${filterState.region === opt ? ' selected' : ''}>${opt}</option>`).join('')
+  const projectFilters = `<div class="filters"><input id="keyword" placeholder="搜索项目名称或编号" value="${esc(filterState.keyword)}"><select>${statusSelect}</select><select>${regionSelect}</select><button class="btn primary" data-action="query">查询</button><button class="btn" data-action="reset-filter">重置</button></div>`
   return (
     head('项目管理', 'WEB-01', '维护项目基础信息、客服电话与服务状态', btn('导出项目', 'export-projects') + `<button class="btn primary" data-action="new-project">新建项目</button>`) +
     metricCards([

@@ -2,7 +2,7 @@ import shell from './prototype-shell.html?raw'
 import * as P from './adapters/pages.js'
 import { badge } from './adapters/ui.js'
 import { clearSession, getSession, setProjectId } from './store/session.js'
-import { loadBootstrap, refresh, records, getSnapshot, setFilteredProjects, clearFilteredProjects } from './store/app-state.js'
+import { loadBootstrap, refresh, records, getSnapshot, setFilteredProjects, clearFilteredProjects, setProjectsFilterState, clearProjectsFilterState } from './store/app-state.js'
 import {
   createRecord,
   publishConfig,
@@ -324,6 +324,7 @@ async function handleAction(act, a) {
         const keyword = document.getElementById('keyword')?.value?.trim() || ''
         const statusSelect = document.querySelector('.filters select:nth-of-type(1)')?.value || ''
         const regionSelect = document.querySelector('.filters select:nth-of-type(2)')?.value || ''
+        setProjectsFilterState(keyword, statusSelect, regionSelect)
         try {
           const projects = await queryProjects(keyword, statusSelect, regionSelect)
           setFilteredProjects(projects)
@@ -344,6 +345,7 @@ async function handleAction(act, a) {
       selects.forEach((s) => (s.selectedIndex = 0))
       if (current === 'projects') {
         clearFilteredProjects()
+        clearProjectsFilterState()
         render()
       }
       toast('筛选条件已重置')
