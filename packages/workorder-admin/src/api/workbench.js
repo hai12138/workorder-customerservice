@@ -99,11 +99,14 @@ export async function deleteProject(id) {
   })
 }
 
-export async function queryProjects(query, status, region, projectId) {
+export async function queryProjects(query, status, province, city, district, businessType, projectId) {
   const params = new URLSearchParams()
   if (projectId) params.set('projectId', projectId)
   if (query) params.set('q', query)
   if (status && status !== '全部状态') params.set('status', status)
-  if (region && region !== '全部地区') params.set('region', region)
+  if (province) params.set('province', province)
+  if (city) params.set('city', city)
+  if (district) params.set('district', district)
+  if (businessType && businessType !== '全部业态') params.set('businessType', businessType)
   return api(`/projects?${params.toString()}`)
 }

@@ -80,9 +80,12 @@ export class WorkbenchController {
     @Query('projectId') projectId?: string,
     @Query('q') query?: string,
     @Query('status') status?: string,
-    @Query('region') region?: string,
+    @Query('province') province?: string,
+    @Query('city') city?: string,
+    @Query('district') district?: string,
+    @Query('businessType') businessType?: string,
   ) {
-    return this.workbench.queryProjects({ query, status, region });
+    return this.workbench.queryProjects({ query, status, province, city, district, businessType });
   }
 
   @Get('catalog/:name')
@@ -150,7 +153,20 @@ export class WorkbenchController {
   @RequirePermissions('config:write')
   updateProject(
     @Param('id') id: string,
-    @Body() body: { name?: string; region?: string; manager?: string; phone?: string; status?: string },
+    @Body()
+    body: {
+      name?: string;
+      province?: string;
+      city?: string;
+      district?: string;
+      address?: string;
+      latitude?: number;
+      longitude?: number;
+      businessType?: string;
+      manager?: string;
+      phone?: string;
+      status?: string;
+    },
   ) {
     return this.workbench.updateProject(id, body);
   }

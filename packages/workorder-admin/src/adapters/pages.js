@@ -81,6 +81,7 @@ export function projects() {
       `<div class="namecell"><strong>${esc(p.title)}</strong><span class="muted">${esc(p.subtitle)}</span></div>`,
       esc(p.id),
       esc(p.values?.region || '—'),
+      esc(p.values?.businessType || '—'),
       esc(p.values?.phone || '—'),
       esc(p.values?.manager || '—'),
       toneBadge(p.status, p.tone),
@@ -89,10 +90,25 @@ export function projects() {
   )
   const filterState = getProjectsFilterState()
   const statusOptions = ['全部状态', '服务中', '筹备中', '未启用', '已停用']
-  const regionOptions = ['全部地区', '华东', '华南', '华北']
+  const businessTypeOptions = ['全部业态', '住宅公寓', '产业园区', '写字楼', '商业综合体']
   const statusSelect = statusOptions.map((opt) => `<option${filterState.status === opt ? ' selected' : ''}>${opt}</option>`).join('')
-  const regionSelect = regionOptions.map((opt) => `<option${filterState.region === opt ? ' selected' : ''}>${opt}</option>`).join('')
-  const projectFilters = `<div class="filters"><input id="keyword" placeholder="搜索项目名称或编号" value="${esc(filterState.keyword)}"><select>${statusSelect}</select><select>${regionSelect}</select><button class="btn primary" data-action="query">查询</button><button class="btn" data-action="reset-filter">重置</button></div>`
+  const businessTypeSelect = businessTypeOptions.map((opt) => `<option${filterState.businessType === opt ? ' selected' : ''}>${opt}</option>`).join('')
+  const projectFilters = `<div class="filters">
+    <input id="keyword" placeholder="搜索项目名称或编号" value="${esc(filterState.keyword)}">
+    <select id="status-select">${statusSelect}</select>
+    <select id="province-select">
+      <option value="">全部省份</option>
+    </select>
+    <select id="city-select" disabled>
+      <option value="">全部城市</option>
+    </select>
+    <select id="district-select" disabled>
+      <option value="">全部区县</option>
+    </select>
+    <select id="businessType-select">${businessTypeSelect}</select>
+    <button class="btn primary" data-action="query">查询</button>
+    <button class="btn" data-action="reset-filter">重置</button>
+  </div>`
   return (
     head('项目管理', 'WEB-01', '维护项目基础信息、客服电话与服务状态', btn('导出项目', 'export-projects') + `<button class="btn primary" data-action="new-project">新建项目</button>`) +
     metricCards([
@@ -102,7 +118,7 @@ export function projects() {
       { label: '已停用', value: '0', detail: '—', tone: 'neutral' },
     ]) +
     projectFilters +
-    table(['项目名称', '项目编号', '地区', '客服电话', '项目管理员', '服务状态', '操作'], rows) +
+    table(['项目名称', '项目编号', '地区', '业态', '客服电话', '项目管理员', '服务状态', '操作'], rows) +
     footer(`共 ${list.length} 个项目`)
   )
 }

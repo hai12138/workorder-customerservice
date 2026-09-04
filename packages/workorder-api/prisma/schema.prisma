@@ -63,15 +63,21 @@ model UserRole {
 }
 
 model Project {
-  id        String   @id @default(cuid())
-  tenantId  String   @default("default") @map("tenant_id")
-  code      String
-  name      String
-  region    String?
-  manager   String?
-  phone     String?
-  status    String   @default("服务中")
-  createdAt DateTime @default(now()) @map("created_at")
+  id           String   @id @default(cuid())
+  tenantId     String   @default("default") @map("tenant_id")
+  code         String
+  name         String
+  province     String?
+  city         String?
+  district     String?
+  address      String?
+  latitude     Float?
+  longitude    Float?
+  businessType String?  @map("business_type")
+  manager      String?
+  phone        String?
+  status       String   @default("服务中")
+  createdAt    DateTime @default(now()) @map("created_at")
 
   spaces      Space[]
   members     ProjectMember[]

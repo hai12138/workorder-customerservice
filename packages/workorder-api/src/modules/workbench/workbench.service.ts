@@ -158,15 +158,22 @@ export class WorkbenchService {
     const versionLabel = cfg?.label ?? 'V1';
 
     return {
-      projects: projects.map((p) =>
-        entity(p.id, p.name, [p.region, p.status].filter(Boolean).join(' · '), p.status, {
-          region: p.region ?? '—',
+      projects: projects.map((p) => {
+        const locationParts = [p.province, p.city, p.district].filter(Boolean);
+        const location = locationParts.length > 0 ? locationParts.join('/') : '—';
+        return entity(p.id, p.name, [location, p.status].filter(Boolean).join(' · '), p.status, {
+          province: p.province ?? '—',
+          city: p.city ?? '—',
+          district: p.district ?? '—',
+          region: location,
+          address: p.address ?? '—',
+          businessType: p.businessType ?? '—',
           manager: p.manager ?? '—',
           spaces: spaces.filter((s) => s.projectId === p.id).length || '—',
           users: people.filter((u) => u.memberships.some((m) => m.projectId === p.id)).length,
           phone: p.phone ?? '—',
-        }),
-      ),
+        });
+      }),
       spaces: spaces.map((s) =>
         entity(s.id, s.name, `${projects.find((p) => p.id === s.projectId)?.name ?? ''} / ${s.name}`, s.status, {
           type: s.type,
@@ -349,7 +356,13 @@ export class WorkbenchService {
           data: {
             code,
             name: title,
-            region: (input.values?.region as string) || subtitle || null,
+            province: (input.values?.province as string) || null,
+            city: (input.values?.city as string) || null,
+            district: (input.values?.district as string) || null,
+            address: (input.values?.address as string) || null,
+            latitude: (input.values?.latitude as number) || null,
+            longitude: (input.values?.longitude as number) || null,
+            businessType: (input.values?.businessType as string) || null,
             phone: (input.values?.phone as string) || null,
             manager: (input.values?.manager as string) || null,
             status: '筹备中',
@@ -793,7 +806,14 @@ export class WorkbenchService {
     }
   }
 
-  async queryProjects(filters: { query?: string; status?: string; region?: string }) {
+  async queryProjects(filters: {
+    query?: string;
+    status?: string;
+    province?: string;
+    city?: string;
+    district?: string;
+    businessType?: string;
+  }) {
     const conditions: any[] = [];
     
     if (filters.query) {
@@ -801,7 +821,9 @@ export class WorkbenchService {
         OR: [
           { name: { contains: filters.query, mode: 'insensitive' } },
           { id: { contains: filters.query, mode: 'insensitive' } },
-          { region: { contains: filters.query, mode: 'insensitive' } },
+          { province: { contains: filters.query, mode: 'insensitive' } },
+          { city: { contains: filters.query, mode: 'insensitive' } },
+          { district: { contains: filters.query, mode: 'insensitive' } },
         ],
       });
     }
@@ -810,8 +832,20 @@ export class WorkbenchService {
       conditions.push({ status: { contains: filters.status } });
     }
     
-    if (filters.region && filters.region !== '全部地区') {
-      conditions.push({ region: { contains: filters.region } });
+    if (filters.province) {
+      conditions.push({ province: { contains: filters.province } });
+    }
+    
+    if (filters.city) {
+      conditions.push({ city: { contains: filters.city } });
+    }
+    
+    if (filters.district) {
+      conditions.push({ district: { contains: filters.district } });
+    }
+    
+    if (filters.businessType && filters.businessType !== '全部业态') {
+      conditions.push({ businessType: filters.businessType });
     }
     
     const where = conditions.length > 0 ? { AND: conditions } : {};
@@ -825,17 +859,41 @@ export class WorkbenchService {
       select: { id: true, projectId: true },
     });
     
-    return projects.map((p) =>
-      entity(p.id, p.name, [p.region, p.status].filter(Boolean).join(' · '), p.status, {
-        region: p.region ?? '—',
+    return projects.map((p) => {
+      const locationParts = [p.province, p.city, p.district].filter(Boolean);
+      const location = locationParts.length > 0 ? locationParts.join('/') : '—';
+      return entity(p.id, p.name, [location, p.status].filter(Boolean).join(' · '), p.status, {
+        province: p.province ?? '—',
+        city: p.city ?? '—',
+        district: p.district ?? '—',
+        region: location,
+        address: p.address ?? '—',
+        businessType: p.businessType ?? '—',
+        latitude: p.latitude ?? '',
+        longitude: p.longitude ?? '',
         manager: p.manager ?? '—',
         spaces: spaces.filter((s) => s.projectId === p.id).length || '—',
         phone: p.phone ?? '—',
-      }),
-    );
+      });
+    });
   }
 
-  async updateProject(id: string, data: { name?: string; region?: string; manager?: string; phone?: string; status?: string }) {
+  async updateProject(
+    id: string,
+    data: {
+      name?: string;
+      province?: string;
+      city?: string;
+      district?: string;
+      address?: string;
+      latitude?: number;
+      longitude?: number;
+      businessType?: string;
+      manager?: string;
+      phone?: string;
+      status?: string;
+    },
+  ) {
     const project = await this.prisma.project.findUnique({ where: { id } });
     if (!project) throw new NotFoundException('项目不存在');
 
@@ -843,7 +901,13 @@ export class WorkbenchService {
       where: { id },
       data: {
         name: data.name ?? undefined,
-        region: data.region ?? undefined,
+        province: data.province ?? undefined,
+        city: data.city ?? undefined,
+        district: data.district ?? undefined,
+        address: data.address ?? undefined,
+        latitude: data.latitude ?? undefined,
+        longitude: data.longitude ?? undefined,
+        businessType: data.businessType ?? undefined,
         manager: data.manager ?? undefined,
         phone: data.phone ?? undefined,
         status: data.status ?? undefined,
@@ -852,12 +916,22 @@ export class WorkbenchService {
 
     await this.audit(project.id, '已更新项目信息', updated.name);
     
+    const locationParts = [updated.province, updated.city, updated.district].filter(Boolean);
+    const location = locationParts.length > 0 ? locationParts.join('/') : '—';
+    
     return {
       code: 0,
-      data: entity(updated.id, updated.name, [updated.region, updated.status].filter(Boolean).join(' · '), updated.status, {
+      data: entity(updated.id, updated.name, [location, updated.status].filter(Boolean).join(' · '), updated.status, {
+        province: updated.province ?? '—',
+        city: updated.city ?? '—',
+        district: updated.district ?? '—',
+        region: location,
+        address: updated.address ?? '—',
+        businessType: updated.businessType ?? '—',
+        latitude: updated.latitude ?? '',
+        longitude: updated.longitude ?? '',
         manager: updated.manager ?? '—',
         phone: updated.phone ?? '—',
-        region: updated.region ?? '—',
       }),
       message: '项目信息已更新',
       snapshot: await this.bootstrap(project.id),
@@ -875,12 +949,22 @@ export class WorkbenchService {
 
     await this.audit(project.id, '已停用项目', updated.name);
     
+    const locationParts = [updated.province, updated.city, updated.district].filter(Boolean);
+    const location = locationParts.length > 0 ? locationParts.join('/') : '—';
+    
     return {
       code: 0,
-      data: entity(updated.id, updated.name, [updated.region, updated.status].filter(Boolean).join(' · '), updated.status, {
+      data: entity(updated.id, updated.name, [location, updated.status].filter(Boolean).join(' · '), updated.status, {
+        province: updated.province ?? '—',
+        city: updated.city ?? '—',
+        district: updated.district ?? '—',
+        region: location,
+        address: updated.address ?? '—',
+        businessType: updated.businessType ?? '—',
+        latitude: updated.latitude ?? '',
+        longitude: updated.longitude ?? '',
         manager: updated.manager ?? '—',
         phone: updated.phone ?? '—',
-        region: updated.region ?? '—',
       }),
       message: '项目已停用',
       snapshot: await this.bootstrap(project.id),
