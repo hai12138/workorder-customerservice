@@ -110,17 +110,30 @@ model ProjectMember {
   @@map("project_members")
 }
 
+enum SpaceType {
+  BUILDING @map("楼栋")
+  FLOOR    @map("楼层")
+  ROOM     @map("房间")
+  PUBLIC   @map("公区")
+  PARKING  @map("车位")
+}
+
+enum SpaceStatus {
+  AVAILABLE @map("可用")
+  DISABLED  @map("停用")
+}
+
 model Space {
-  id        String   @id @default(cuid())
-  projectId String   @map("project_id")
-  parentId  String?  @map("parent_id")
+  id        String      @id @default(cuid())
+  projectId String      @map("project_id")
+  parentId  String?     @map("parent_id")
   name      String
-  type      String   @default("楼栋")
-  status    String   @default("有效")
-  createdAt DateTime @default(now()) @map("created_at")
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parent    Space?   @relation("SpaceTree", fields: [parentId], references: [id])
-  children  Space[]  @relation("SpaceTree")
+  type      SpaceType   @default(BUILDING)
+  status    SpaceStatus @default(AVAILABLE)
+  createdAt DateTime    @default(now()) @map("created_at")
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent    Space?      @relation("SpaceTree", fields: [parentId], references: [id])
+  children  Space[]     @relation("SpaceTree")
 
   @@map("spaces")
 }

@@ -10,6 +10,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { WorkbenchModule } from './modules/workbench/workbench.module';
 import { NotifyModule } from './modules/notify/notify.module';
 import { AgentModule } from './modules/agent/agent.module';
+import { SpaceModule } from './modules/space/space.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { AgentModule } from './modules/agent/agent.module';
     NotifyModule,
     AgentModule,
     WorkbenchModule,
+    SpaceModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: JwtAuthGuard }],
 })

@@ -372,8 +372,23 @@ export class WorkbenchService {
         break;
       }
       case 'spaces': {
+        const typeMap: Record<string, string> = {
+          '楼栋': 'BUILDING',
+          '楼层': 'FLOOR',
+          '房间': 'ROOM',
+          '公区': 'PUBLIC',
+          '车位': 'PARKING',
+        };
+        const inputType = String(input.values?.type ?? '楼栋');
+        const enumType = typeMap[inputType] || 'BUILDING';
+        
         await this.prisma.space.create({
-          data: { projectId: pid, name: title, type: String(input.values?.type ?? '楼栋'), status: '有效' },
+          data: { 
+            projectId: pid, 
+            name: title, 
+            type: enumType as any,
+            status: 'AVAILABLE' as any,
+          },
         });
         await this.audit(pid, '已创建空间', title);
         break;
