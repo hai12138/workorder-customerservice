@@ -504,7 +504,11 @@ function initCascader(id, requireDistrict = true) {
     }
   })
   
-  // Avoid stacking document click listeners
+  // Avoid stacking document click listeners - remove old handler if exists
+  if (input._cascaderClickHandler) {
+    document.removeEventListener('click', input._cascaderClickHandler)
+  }
+  
   const documentClickHandler = (e) => {
     if (!input.contains(e.target) && !panel.contains(e.target)) {
       closePanel()
@@ -512,12 +516,7 @@ function initCascader(id, requireDistrict = true) {
   }
   
   document.addEventListener('click', documentClickHandler)
-  
-  // Store handler for potential cleanup (though not critical for prototype)
-  input._cascaderCleanup = () => {
-    document.removeEventListener('click', documentClickHandler)
-    if (hoverTimeout) clearTimeout(hoverTimeout)
-  }
+  input._cascaderClickHandler = documentClickHandler
   
   // Initial render
   if (selectedProvince) {
