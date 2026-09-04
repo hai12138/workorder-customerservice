@@ -216,9 +216,7 @@ function render() {
   
   // Hide scopebar on projects page (managing project list itself)
   const scopebar = document.querySelector('.scopebar')
-  const pageEl = document.getElementById('page')
   if (scopebar) scopebar.style.display = current === 'projects' ? 'none' : ''
-  if (pageEl) pageEl.classList.toggle('full-radius', current === 'projects')
   
   // Initialize project filters if on projects page
   if (current === 'projects') {
@@ -363,51 +361,131 @@ function initCascader(id, requireDistrict = true) {
     if (arrow) arrow.classList.remove('open')
   }
   
-  function renderPanel(useHoverProvince = '', useHoverCity = '') {
-    let html = ''
-    const displayProvince = useHoverProvince || selectedProvince
-    const displayCity = useHoverCity || selectedCity
-    
-    // Province column
-    html += '<div class="cascader-column">'
+  function renderProvinceColumn() {
+    let html = '<div class="cascader-column" data-column="province">'
     CHINA_PCA.forEach(prov => {
       const isSelected = prov.name === selectedProvince
-      const isHovered = prov.name === displayProvince
+      const isHovered = prov.name === (hoverProvince || selectedProvince)
       html += `<div class="cascader-item ${isSelected ? 'selected' : ''} ${isHovered && !isSelected ? 'hovered' : ''}" data-level="province" data-value="${esc(prov.name)}">${esc(prov.name)}</div>`
     })
     html += '</div>'
+    return html
+  }
+  
+  function renderCityColumn(provinceName) {
+    if (!provinceName) return ''
+    const province = CHINA_PCA.find(p => p.name === provinceName)
+    if (!province) return ''
     
-    // City column (if province hovered or selected)
-    if (displayProvince) {
-      const province = CHINA_PCA.find(p => p.name === displayProvince)
-      if (province) {
-        html += '<div class="cascader-column">'
-        province.cities.forEach(city => {
-          const isSelected = city.name === selectedCity && displayProvince === selectedProvince
-          const isHovered = city.name === displayCity && displayProvince === hoverProvince
-          html += `<div class="cascader-item ${isSelected ? 'selected' : ''} ${isHovered && !isSelected ? 'hovered' : ''}" data-level="city" data-value="${esc(city.name)}">${esc(city.name)}</div>`
-        })
-        html += '</div>'
-      }
+    let html = '<div class="cascader-column" data-column="city">'
+    province.cities.forEach(city => {
+      const isSelected = city.name === selectedCity && provinceName === selectedProvince
+      const isHovered = city.name === (hoverCity || selectedCity) && provinceName === hoverProvince
+      html += `<div class="cascader-item ${isSelected ? 'selected' : ''} ${isHovered && !isSelected ? 'hovered' : ''}" data-level="city" data-value="${esc(city.name)}">${esc(city.name)}</div>`
+    })
+    html += '</div>'
+    return html
+  }
+  
+  function renderDistrictColumn(provinceName, cityName) {
+    if (!provinceName || !cityName) return ''
+    const province = CHINA_PCA.find(p => p.name === provinceName)
+    if (!province) return ''
+    const city = province.cities.find(c => c.name === cityName)
+    if (!city) return ''
+    
+    let html = '<div class="cascader-column" data-column="district">'
+    city.districts.forEach(district => {
+      const isSelected = district === selectedDistrict && cityName === selectedCity && provinceName === selectedProvince
+      html += `<div class="cascader-item ${isSelected ? 'selected' : ''}" data-level="district" data-value="${esc(district)}">${esc(district)}</div>`
+    })
+    html += '</div>'
+    return html
+  }
+  
+  function renderPanel(useHoverProvince = '', useHoverCity = '') {
+    const displayProvince = useHoverProvince || selectedProvince
+    const displayCity = useHoverCity || selectedCity
+    
+    const columns = panel.querySelectorAll('.cascader-column')
+    const existingProvinceCol = columns[0]?.dataset.column === 'province' ? columns[0] : null
+    const existingCityCol = columns[1]?.dataset.column === 'city' ? columns[1] : null
+    const existingDistrictCol = columns[2]?.dataset.column === 'district' ? columns[2] : null
+    
+    // Initial render: build all columns
+    if (!existingProvinceCol) {
+      let html = renderProvinceColumn()
+      html += renderCityColumn(displayProvince)
+      html += renderDistrictColumn(displayProvince, displayCity)
+      panel.innerHTML = html
+      return
     }
     
-    // District column (if city hovered or selected)
-    if (displayProvince && displayCity) {
-      const province = CHINA_PCA.find(p => p.name === displayProvince)
-      if (province) {
-        const city = province.cities.find(c => c.name === displayCity)
-        if (city) {
-          html += '<div class="cascader-column">'
-          city.districts.forEach(district => {
-            const isSelected = district === selectedDistrict && displayCity === selectedCity && displayProvince === selectedProvince
-            html += `<div class="cascader-item ${isSelected ? 'selected' : ''}" data-level="district" data-value="${esc(district)}">${esc(district)}</div>`
-          })
-          html += '</div>'
-        }
-      }
+    // Incremental update: only rebuild changed columns
+    // Update province column items (highlight only, no rebuild to preserve scroll)
+    if (existingProvinceCol) {
+      existingProvinceCol.querySelectorAll('.cascader-item').forEach(item => {
+        const provName = item.dataset.value
+        const isSelected = provName === selectedProvince
+        const isHovered = provName === displayProvince
+        item.className = `cascader-item ${isSelected ? 'selected' : ''} ${isHovered && !isSelected ? 'hovered' : ''}`
+      })
     }
     
-    panel.innerHTML = html
+    // Rebuild city column if province changed
+    const lastDisplayedProvince = existingCityCol?.dataset.province
+    if (displayProvince && displayProvince !== lastDisplayedProvince) {
+      const cityHtml = renderCityColumn(displayProvince)
+      if (existingCityCol) {
+        existingCityCol.outerHTML = cityHtml
+      } else {
+        existingProvinceCol.insertAdjacentHTML('afterend', cityHtml)
+      }
+      const newCityCol = panel.querySelector('[data-column="city"]')
+      if (newCityCol) newCityCol.dataset.province = displayProvince
+      
+      // Remove district column when city column changes
+      const districtCol = panel.querySelector('[data-column="district"]')
+      if (districtCol) districtCol.remove()
+    } else if (!displayProvince && existingCityCol) {
+      // Remove city and district if no province
+      existingCityCol.remove()
+      if (existingDistrictCol) existingDistrictCol.remove()
+    } else if (existingCityCol && displayProvince) {
+      // Update city column items (highlight only, preserve scroll)
+      existingCityCol.querySelectorAll('.cascader-item').forEach(item => {
+        const cityName = item.dataset.value
+        const isSelected = cityName === selectedCity && displayProvince === selectedProvince
+        const isHovered = cityName === displayCity && displayProvince === hoverProvince
+        item.className = `cascader-item ${isSelected ? 'selected' : ''} ${isHovered && !isSelected ? 'hovered' : ''}`
+      })
+    }
+    
+    // Rebuild district column if city changed
+    const currentCityCol = panel.querySelector('[data-column="city"]')
+    const lastDisplayedCity = currentCityCol?.dataset.city
+    if (displayProvince && displayCity && displayCity !== lastDisplayedCity) {
+      const districtHtml = renderDistrictColumn(displayProvince, displayCity)
+      const currentDistrictCol = panel.querySelector('[data-column="district"]')
+      if (currentDistrictCol) {
+        currentDistrictCol.outerHTML = districtHtml
+      } else if (currentCityCol) {
+        currentCityCol.insertAdjacentHTML('afterend', districtHtml)
+      }
+      const newDistrictCol = panel.querySelector('[data-column="district"]')
+      if (newDistrictCol) newDistrictCol.dataset.city = displayCity
+    } else if (displayProvince && !displayCity) {
+      // Remove district if no city
+      const districtCol = panel.querySelector('[data-column="district"]')
+      if (districtCol) districtCol.remove()
+    } else if (existingDistrictCol && displayProvince && displayCity) {
+      // Update district column items (highlight only)
+      existingDistrictCol.querySelectorAll('.cascader-item').forEach(item => {
+        const districtName = item.dataset.value
+        const isSelected = districtName === selectedDistrict && displayCity === selectedCity && displayProvince === selectedProvince
+        item.className = `cascader-item ${isSelected ? 'selected' : ''}`
+      })
+    }
   }
   
   function openPanel() {
