@@ -77,16 +77,19 @@ export function projects() {
   const serving = list.filter((p) => p.status.includes('服务')).length
   const draft = list.filter((p) => !p.status.includes('服务') && !p.status.includes('停')).length
   const rows = list.map(
-    (p) => [
-      `<div class="namecell"><strong>${esc(p.title)}</strong><span class="muted">${esc(p.subtitle)}</span></div>`,
-      esc(p.id),
-      esc(p.values?.region || '—'),
-      esc(p.values?.businessType || '—'),
-      esc(p.values?.phone || '—'),
-      esc(p.values?.manager || '—'),
-      toneBadge(p.status, p.tone),
-      `<div class="row-actions"><button class="text-btn" data-action="project-detail" data-id="${esc(p.id)}">详情</button><button class="text-btn" data-action="project-edit" data-id="${esc(p.id)}">编辑</button></div>`,
-    ],
+    (p) => {
+      const region = [p.values?.province, p.values?.city, p.values?.district].filter(Boolean).join(' / ') || '—'
+      return [
+        `<div class="namecell"><strong>${esc(p.title)}</strong><span class="muted">${esc(p.subtitle)}</span></div>`,
+        esc(p.id),
+        esc(region),
+        esc(p.values?.businessType || '—'),
+        esc(p.values?.phone || '—'),
+        esc(p.values?.manager || '—'),
+        toneBadge(p.status, p.tone),
+        `<div class="row-actions"><button class="text-btn" data-action="project-detail" data-id="${esc(p.id)}">详情</button><button class="text-btn" data-action="project-edit" data-id="${esc(p.id)}">编辑</button></div>`,
+      ]
+    },
   )
   const filterState = getProjectsFilterState()
   const statusOptions = ['全部状态', '服务中', '筹备中', '未启用', '已停用']

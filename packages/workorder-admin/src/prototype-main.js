@@ -310,7 +310,7 @@ function wechatMessagePreview() {
 
 // Cascader component for province-city-district selection
 function createCascader(id, initialValue = { province: '', city: '', district: '' }, requireDistrict = true) {
-  const placeholder = requireDistrict ? '请选择省 / 市 / 区' : '选择省份 / 城市 / 区县'
+  const placeholder = requireDistrict ? '请选择省市区' : '选择省份 / 城市 / 区县'
   const displayText = initialValue.province 
     ? [initialValue.province, initialValue.city, initialValue.district].filter(Boolean).join(' / ')
     : ''
@@ -348,7 +348,7 @@ function initCascader(id, requireDistrict = true) {
       display.textContent = parts.join(' / ')
       input.classList.remove('placeholder')
     } else {
-      display.textContent = requireDistrict ? '请选择省 / 市 / 区' : '选择省份 / 城市 / 区县'
+      display.textContent = requireDistrict ? '请选择省市区' : '选择省份 / 城市 / 区县'
       input.classList.add('placeholder')
     }
     if (provinceInput) provinceInput.value = selectedProvince
@@ -489,7 +489,7 @@ function projectForm(rec) {
         <input id="f-title" required placeholder="例如：云栖雅苑" value="${rec ? esc(rec.title) : ''}">
       </div>
       <div class="form-row full">
-        <label>* 省 / 市 / 区</label>
+        <label>* 省市区</label>
         ${createCascader('f-pca', initialPCA, true)}
       </div>
       <div class="form-row">
@@ -752,9 +752,12 @@ async function handleAction(act, a) {
       const id = a.dataset.id
       const rec = records('projects').find((x) => x.id === id) || records('projects')[0]
       if (!rec) return toast('未找到项目')
+      const pcaPath = [rec.values?.province, rec.values?.city, rec.values?.district].filter(Boolean).join(' / ') || '—'
+      const longitude = rec.values?.longitude ? String(rec.values.longitude) : '—'
+      const latitude = rec.values?.latitude ? String(rec.values.latitude) : '—'
       drawer(
         `${rec.title} · 项目详情`,
-        `<div class="actions">${badge(rec.status, 'ok')}<span class="muted">${rec.id}</span></div><div class="kv" style="margin-top:15px"><div><span>副标题</span><b>${rec.subtitle || '—'}</b></div><div><span>管理员</span><b>${rec.values?.manager || '—'}</b></div><div><span>电话</span><b>${rec.values?.phone || '—'}</b></div><div><span>空间数</span><b>${rec.values?.spaces ?? '—'}</b></div></div>`,
+        `<div class="actions">${badge(rec.status, 'ok')}<span class="muted">${rec.id}</span></div><div class="kv" style="margin-top:15px"><div style="grid-column:1/-1"><span>省市区</span><b>${pcaPath}</b></div><div style="grid-column:1/-1"><span>详细地址</span><b>${rec.values?.address || '—'}</b></div><div><span>业态</span><b>${rec.values?.businessType || '—'}</b></div><div><span>管理员</span><b>${rec.values?.manager || '—'}</b></div><div><span>电话</span><b>${rec.values?.phone || '—'}</b></div><div><span>经度</span><b>${longitude}</b></div><div><span>纬度</span><b>${latitude}</b></div></div>`,
       )
       return
     }
