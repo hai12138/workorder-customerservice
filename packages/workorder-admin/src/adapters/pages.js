@@ -77,34 +77,39 @@ export function projects() {
   const serving = list.filter((p) => p.status.includes('服务')).length
   const draft = list.filter((p) => !p.status.includes('服务') && !p.status.includes('停')).length
   const rows = list.map(
-    (p) => [
-      `<div class="namecell"><strong>${esc(p.title)}</strong><span class="muted">${esc(p.subtitle)}</span></div>`,
-      esc(p.id),
-      esc(p.values?.region || '—'),
-      esc(p.values?.businessType || '—'),
-      esc(p.values?.phone || '—'),
-      esc(p.values?.manager || '—'),
-      toneBadge(p.status, p.tone),
-      `<div class="row-actions"><button class="text-btn" data-action="project-detail" data-id="${esc(p.id)}">详情</button><button class="text-btn" data-action="project-edit" data-id="${esc(p.id)}">编辑</button></div>`,
-    ],
+    (p) => {
+      const region = [p.values?.province, p.values?.city, p.values?.district].filter(Boolean).join(' / ') || '—'
+      return [
+        `<div class="namecell"><strong>${esc(p.title)}</strong><span class="muted">${esc(p.subtitle)}</span></div>`,
+        esc(p.id),
+        esc(region),
+        esc(p.values?.businessType || '—'),
+        esc(p.values?.phone || '—'),
+        esc(p.values?.manager || '—'),
+        toneBadge(p.status, p.tone),
+        `<div class="row-actions"><button class="text-btn" data-action="project-detail" data-id="${esc(p.id)}">详情</button><button class="text-btn" data-action="project-edit" data-id="${esc(p.id)}">编辑</button></div>`,
+      ]
+    },
   )
   const filterState = getProjectsFilterState()
   const statusOptions = ['全部状态', '服务中', '筹备中', '未启用', '已停用']
   const businessTypeOptions = ['全部业态', '住宅公寓', '产业园区', '写字楼', '商业综合体']
   const statusSelect = statusOptions.map((opt) => `<option${filterState.status === opt ? ' selected' : ''}>${opt}</option>`).join('')
   const businessTypeSelect = businessTypeOptions.map((opt) => `<option${filterState.businessType === opt ? ' selected' : ''}>${opt}</option>`).join('')
+  const pcaCascader = `<div class="cascader-wrap" id="filter-pca-wrap">
+    <div class="cascader-input placeholder" id="filter-pca-input" tabindex="0">
+      <span id="filter-pca-display">选择省份 / 城市 / 区县</span>
+    </div>
+    <span class="cascader-arrow">▼</span>
+    <div class="cascader-panel" id="filter-pca-panel"></div>
+    <input type="hidden" id="filter-pca-province" value="${esc(filterState.province)}">
+    <input type="hidden" id="filter-pca-city" value="${esc(filterState.city)}">
+    <input type="hidden" id="filter-pca-district" value="${esc(filterState.district)}">
+  </div>`
   const projectFilters = `<div class="filters">
     <input id="keyword" placeholder="搜索项目名称或编号" value="${esc(filterState.keyword)}">
     <select id="status-select">${statusSelect}</select>
-    <select id="province-select">
-      <option value="">全部省份</option>
-    </select>
-    <select id="city-select" disabled>
-      <option value="">全部城市</option>
-    </select>
-    <select id="district-select" disabled>
-      <option value="">全部区县</option>
-    </select>
+    ${pcaCascader}
     <select id="businessType-select">${businessTypeSelect}</select>
     <button class="btn primary" data-action="query">查询</button>
     <button class="btn" data-action="reset-filter">重置</button>
