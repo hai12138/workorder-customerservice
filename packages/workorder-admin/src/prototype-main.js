@@ -13,6 +13,7 @@ import {
   assignWorkorder,
   runCommand,
   queryProjects,
+  updateProject,
 } from './api/workbench.js'
 import { notifyApi } from './api/notify.js'
 import { agentApi } from './api/agent.js'
