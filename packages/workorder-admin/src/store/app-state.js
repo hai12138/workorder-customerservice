@@ -7,7 +7,7 @@ import { getProjectId, setProjectId } from './session.js'
 let snapshot = null
 let loading = null
 let filteredProjects = null
-let projectsFilterState = { keyword: '', status: '', region: '' }
+let projectsFilterState = { keyword: '', status: '', province: '', city: '', district: '', businessType: '' }
 
 export function getSnapshot() {
   return snapshot
@@ -32,12 +32,12 @@ export function getProjectsFilterState() {
   return projectsFilterState
 }
 
-export function setProjectsFilterState(keyword, status, region) {
-  projectsFilterState = { keyword, status, region }
+export function setProjectsFilterState(keyword, status, province, city, district, businessType) {
+  projectsFilterState = { keyword, status, province, city, district, businessType }
 }
 
 export function clearProjectsFilterState() {
-  projectsFilterState = { keyword: '', status: '', region: '' }
+  projectsFilterState = { keyword: '', status: '', province: '', city: '', district: '', businessType: '' }
 }
 
 export function projectId() {
