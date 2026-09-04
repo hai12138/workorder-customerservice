@@ -41,15 +41,22 @@ describe('WorkbenchService - Projects QA Regression Tests', () => {
   });
 
   describe('queryProjects - Combined Filter Query (Issue #3)', () => {
-    it('should AND together query, status, and region filters', async () => {
+    it('should AND together query, status, province, city, district, and businessType filters', async () => {
       const mockProjects = [
         {
           id: 'proj-1',
           name: '华东项目',
-          region: '华东',
+          province: '江苏省',
+          city: '南京市',
+          district: '鼓楼区',
+          address: '测试路123号',
+          latitude: null,
+          longitude: null,
+          businessType: '住宅',
           status: '服务中',
           phone: '400-123-4567',
           manager: '张经理',
+          createdAt: new Date(),
         },
       ];
 
@@ -59,7 +66,10 @@ describe('WorkbenchService - Projects QA Regression Tests', () => {
       await service.queryProjects({
         query: '华东',
         status: '服务中',
-        region: '华东',
+        province: '江苏省',
+        city: '南京市',
+        district: '鼓楼区',
+        businessType: '住宅',
       });
 
       // Verify Prisma was called with AND conditions
@@ -70,11 +80,16 @@ describe('WorkbenchService - Projects QA Regression Tests', () => {
               OR: [
                 { name: { contains: '华东', mode: 'insensitive' } },
                 { id: { contains: '华东', mode: 'insensitive' } },
-                { region: { contains: '华东', mode: 'insensitive' } },
+                { province: { contains: '华东', mode: 'insensitive' } },
+                { city: { contains: '华东', mode: 'insensitive' } },
+                { district: { contains: '华东', mode: 'insensitive' } },
               ],
             },
             { status: { contains: '服务中' } },
-            { region: { contains: '华东' } },
+            { province: { contains: '江苏省' } },
+            { city: { contains: '南京市' } },
+            { district: { contains: '鼓楼区' } },
+            { businessType: '住宅' },
           ],
         },
         orderBy: { createdAt: 'asc' },
@@ -94,7 +109,9 @@ describe('WorkbenchService - Projects QA Regression Tests', () => {
               OR: [
                 { name: { contains: '项目', mode: 'insensitive' } },
                 { id: { contains: '项目', mode: 'insensitive' } },
-                { region: { contains: '项目', mode: 'insensitive' } },
+                { province: { contains: '项目', mode: 'insensitive' } },
+                { city: { contains: '项目', mode: 'insensitive' } },
+                { district: { contains: '项目', mode: 'insensitive' } },
               ],
             },
           ],
@@ -115,13 +132,13 @@ describe('WorkbenchService - Projects QA Regression Tests', () => {
       });
     });
 
-    it('should skip "全部状态" and "全部地区" filters', async () => {
+    it('should skip "全部状态" and "全部业态" filters', async () => {
       jest.spyOn(prisma.project, 'findMany').mockResolvedValue([]);
       jest.spyOn(prisma.space, 'findMany').mockResolvedValue([]);
 
       await service.queryProjects({
         status: '全部状态',
-        region: '全部地区',
+        businessType: '全部业态',
       });
 
       expect(prisma.project.findMany).toHaveBeenCalledWith({
@@ -131,16 +148,23 @@ describe('WorkbenchService - Projects QA Regression Tests', () => {
     });
   });
 
-  describe('queryProjects - Region Field Mapping (Issue #4)', () => {
-    it('should include region in values object', async () => {
+  describe('queryProjects - PCA Region Field Mapping (Issue #4)', () => {
+    it('should include region computed from province/city/district in values object', async () => {
       const mockProjects = [
         {
           id: 'proj-1',
           name: '测试项目',
-          region: '华东',
+          province: '江苏省',
+          city: '南京市',
+          district: '鼓楼区',
+          address: '测试路123号',
+          latitude: null,
+          longitude: null,
+          businessType: '住宅',
           status: '服务中',
           phone: '400-123-4567',
           manager: '张经理',
+          createdAt: new Date(),
         },
       ];
 
@@ -153,22 +177,34 @@ describe('WorkbenchService - Projects QA Regression Tests', () => {
         id: 'proj-1',
         title: '测试项目',
         values: expect.objectContaining({
-          region: '华东',
+          province: '江苏省',
+          city: '南京市',
+          district: '鼓楼区',
+          region: '江苏省/南京市/鼓楼区',
+          address: '测试路123号',
+          businessType: '住宅',
           manager: '张经理',
           phone: '400-123-4567',
         }),
       });
     });
 
-    it('should handle null region gracefully', async () => {
+    it('should handle null PCA fields gracefully', async () => {
       const mockProjects = [
         {
           id: 'proj-1',
           name: '测试项目',
-          region: null,
+          province: null,
+          city: null,
+          district: null,
+          address: null,
+          latitude: null,
+          longitude: null,
+          businessType: null,
           status: '服务中',
           phone: null,
           manager: null,
+          createdAt: new Date(),
         },
       ];
 
@@ -178,7 +214,12 @@ describe('WorkbenchService - Projects QA Regression Tests', () => {
       const result = await service.queryProjects({});
 
       expect(result[0].values).toMatchObject({
+        province: '—',
+        city: '—',
+        district: '—',
         region: '—',
+        address: '—',
+        businessType: '—',
         manager: '—',
         phone: '—',
       });
@@ -186,23 +227,26 @@ describe('WorkbenchService - Projects QA Regression Tests', () => {
   });
 
   describe('Integration Test Scenarios', () => {
-    it('should support create → list → bootstrap flow with region persistence', async () => {
+    it('should support create → list → bootstrap flow with PCA fields persistence', async () => {
       // This test documents the expected flow:
-      // 1. Create project with region="华东", phone="400-123", manager="张经理"
-      // 2. List should immediately show region without needing a second edit
-      // 3. Bootstrap should also include region in values
+      // 1. Create project with province="江苏省", city="南京市", district="鼓楼区", phone="400-123", manager="张经理"
+      // 2. List should immediately show computed region from PCA fields without needing a second edit
+      // 3. Bootstrap should also include region (computed) in values
       
-      // Expected: region appears in both queryProjects and bootstrap entity mappings
-      // Both should have: values: { region, phone, manager, spaces, ... }
+      // Expected: region (computed from province/city/district) appears in both queryProjects and bootstrap entity mappings
+      // Both should have: values: { province, city, district, region, address, businessType, phone, manager, spaces, ... }
     });
 
-    it('should support combined filter query with all three params', async () => {
+    it('should support combined filter query with all PCA params', async () => {
       // Expected behavior:
-      // GET /projects?q=项目&status=服务中&region=华东
+      // GET /projects?q=项目&status=服务中&province=江苏省&city=南京市&district=鼓楼区&businessType=住宅
       // Should return projects that match ALL conditions (AND semantics):
-      // - (name OR id OR region) contains "项目"
+      // - (name OR id OR province OR city OR district) contains "项目"
       // - AND status contains "服务中"
-      // - AND region contains "华东"
+      // - AND province contains "江苏省"
+      // - AND city contains "南京市"
+      // - AND district contains "鼓楼区"
+      // - AND businessType equals "住宅"
     });
   });
 });
@@ -216,22 +260,25 @@ describe('WorkbenchService - Projects QA Regression Tests', () => {
  * 
  * 2. Create Project:
  *    - Click "新建项目"
- *    - Fill: name="测试项目", region="华东", phone="400-123", manager="张经理"
+ *    - Fill: name="测试项目", province="江苏省", city="南京市", district="鼓楼区", businessType="住宅", phone="400-123", manager="张经理"
  *    - Save
- *    - Verify list shows region immediately (no need for edit)
+ *    - Verify list shows computed region immediately (no need for edit)
  * 
  * 3. Edit Project:
  *    - Click "编辑" on a project
  *    - Modal should show pre-filled values
- *    - Change region to "华南"
+ *    - Change province to "浙江省", city to "杭州市"
  *    - Save and verify update
  * 
  * 4. Combined Filters:
  *    - Search: "项目"
  *    - Status: "服务中"
- *    - Region: "华东"
+ *    - Province: "江苏省"
+ *    - City: "南京市"
+ *    - District: "鼓楼区"
+ *    - Business Type: "住宅"
  *    - Click 查询
- *    - Should return only projects matching ALL three conditions
+ *    - Should return only projects matching ALL conditions
  * 
  * 5. Reset Filter:
  *    - Click 重置

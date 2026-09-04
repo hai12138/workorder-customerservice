@@ -597,7 +597,6 @@ export class WorkbenchService {
           where: { id: command.id },
           data: {
             name: command.title,
-            region: (command.values?.region as string) ?? null,
             phone: (command.values?.phone as string) ?? null,
             manager: (command.values?.manager as string) ?? null,
           },
