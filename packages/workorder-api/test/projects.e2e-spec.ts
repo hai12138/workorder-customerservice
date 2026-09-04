@@ -58,14 +58,23 @@ describe('Projects CRUD (e2e)', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({
         name: 'E2E 测试项目 - 已更新',
-        region: '华东区',
+        province: '江苏省',
+        city: '南京市',
+        district: '鼓楼区',
+        address: '测试路123号',
+        businessType: '住宅',
         manager: '李经理',
         phone: '400-123-4567',
       });
     expect(updated.status).toBeLessThan(300);
     expect(updated.body.code).toBe(0);
     expect(updated.body.data.title).toBe('E2E 测试项目 - 已更新');
-    expect(updated.body.data.values.region).toBe('华东区');
+    expect(updated.body.data.values.province).toBe('江苏省');
+    expect(updated.body.data.values.city).toBe('南京市');
+    expect(updated.body.data.values.district).toBe('鼓楼区');
+    expect(updated.body.data.values.region).toBe('江苏省/南京市/鼓楼区');
+    expect(updated.body.data.values.address).toBe('测试路123号');
+    expect(updated.body.data.values.businessType).toBe('住宅');
     expect(updated.body.data.values.manager).toBe('李经理');
     expect(updated.body.data.values.phone).toBe('400-123-4567');
     expect(updated.body.message).toContain('已更新');
