@@ -338,6 +338,9 @@ function initCascader(id, requireDistrict = true) {
   let selectedProvince = provinceInput?.value || ''
   let selectedCity = cityInput?.value || ''
   let selectedDistrict = districtInput?.value || ''
+  let hoverProvince = ''
+  let hoverCity = ''
+  let hoverTimeout = null
   
   function updateDisplay() {
     const parts = [selectedProvince, selectedCity, selectedDistrict].filter(Boolean)
@@ -358,39 +361,43 @@ function initCascader(id, requireDistrict = true) {
     if (arrow) arrow.classList.remove('open')
   }
   
-  function renderPanel() {
+  function renderPanel(useHoverProvince = '', useHoverCity = '') {
     let html = ''
+    const displayProvince = useHoverProvince || selectedProvince
+    const displayCity = useHoverCity || selectedCity
     
     // Province column
     html += '<div class="cascader-column">'
     CHINA_PCA.forEach(prov => {
       const isSelected = prov.name === selectedProvince
-      html += `<div class="cascader-item ${isSelected ? 'selected' : ''}" data-level="province" data-value="${esc(prov.name)}">${esc(prov.name)}</div>`
+      const isHovered = prov.name === displayProvince
+      html += `<div class="cascader-item ${isSelected ? 'selected' : ''} ${isHovered && !isSelected ? 'hovered' : ''}" data-level="province" data-value="${esc(prov.name)}">${esc(prov.name)}</div>`
     })
     html += '</div>'
     
-    // City column (if province selected)
-    if (selectedProvince) {
-      const province = CHINA_PCA.find(p => p.name === selectedProvince)
+    // City column (if province hovered or selected)
+    if (displayProvince) {
+      const province = CHINA_PCA.find(p => p.name === displayProvince)
       if (province) {
         html += '<div class="cascader-column">'
         province.cities.forEach(city => {
-          const isSelected = city.name === selectedCity
-          html += `<div class="cascader-item ${isSelected ? 'selected' : ''}" data-level="city" data-value="${esc(city.name)}">${esc(city.name)}</div>`
+          const isSelected = city.name === selectedCity && displayProvince === selectedProvince
+          const isHovered = city.name === displayCity && displayProvince === hoverProvince
+          html += `<div class="cascader-item ${isSelected ? 'selected' : ''} ${isHovered && !isSelected ? 'hovered' : ''}" data-level="city" data-value="${esc(city.name)}">${esc(city.name)}</div>`
         })
         html += '</div>'
       }
     }
     
-    // District column (if city selected)
-    if (selectedProvince && selectedCity) {
-      const province = CHINA_PCA.find(p => p.name === selectedProvince)
+    // District column (if city hovered or selected)
+    if (displayProvince && displayCity) {
+      const province = CHINA_PCA.find(p => p.name === displayProvince)
       if (province) {
-        const city = province.cities.find(c => c.name === selectedCity)
+        const city = province.cities.find(c => c.name === displayCity)
         if (city) {
           html += '<div class="cascader-column">'
           city.districts.forEach(district => {
-            const isSelected = district === selectedDistrict
+            const isSelected = district === selectedDistrict && displayCity === selectedCity && displayProvince === selectedProvince
             html += `<div class="cascader-item ${isSelected ? 'selected' : ''}" data-level="district" data-value="${esc(district)}">${esc(district)}</div>`
           })
           html += '</div>'
@@ -402,6 +409,8 @@ function initCascader(id, requireDistrict = true) {
   }
   
   function openPanel() {
+    hoverProvince = ''
+    hoverCity = ''
     renderPanel()
     panel.classList.add('open')
     if (arrow) arrow.classList.add('open')
@@ -427,6 +436,31 @@ function initCascader(id, requireDistrict = true) {
     }
   })
   
+  // Hover to reveal next level
+  panel.addEventListener('mouseover', (e) => {
+    const item = e.target.closest('.cascader-item')
+    if (!item) return
+    
+    const level = item.dataset.level
+    const value = item.dataset.value
+    
+    if (hoverTimeout) {
+      clearTimeout(hoverTimeout)
+    }
+    
+    hoverTimeout = setTimeout(() => {
+      if (level === 'province') {
+        hoverProvince = value
+        hoverCity = ''
+        renderPanel(hoverProvince, '')
+      } else if (level === 'city') {
+        hoverCity = value
+        renderPanel(hoverProvince || selectedProvince, hoverCity)
+      }
+    }, 80)
+  })
+  
+  // Click to select/confirm
   panel.addEventListener('click', (e) => {
     const item = e.target.closest('.cascader-item')
     if (!item) return
@@ -438,33 +472,52 @@ function initCascader(id, requireDistrict = true) {
       selectedProvince = value
       selectedCity = ''
       selectedDistrict = ''
-      renderPanel()
+      hoverProvince = value
+      hoverCity = ''
       updateDisplay()
       if (!requireDistrict) {
         // For filters, allow selecting just province
         setTimeout(() => closePanel(), 150)
       }
     } else if (level === 'city') {
+      if (hoverProvince) {
+        selectedProvince = hoverProvince
+      }
       selectedCity = value
       selectedDistrict = ''
-      renderPanel()
+      hoverCity = value
       updateDisplay()
       if (!requireDistrict) {
         // For filters, allow selecting just city
         setTimeout(() => closePanel(), 150)
       }
     } else if (level === 'district') {
+      if (hoverProvince) {
+        selectedProvince = hoverProvince
+      }
+      if (hoverCity) {
+        selectedCity = hoverCity
+      }
       selectedDistrict = value
       updateDisplay()
       setTimeout(() => closePanel(), 150)
     }
   })
   
-  document.addEventListener('click', (e) => {
+  // Avoid stacking document click listeners
+  const documentClickHandler = (e) => {
     if (!input.contains(e.target) && !panel.contains(e.target)) {
       closePanel()
     }
-  })
+  }
+  
+  document.addEventListener('click', documentClickHandler)
+  
+  // Store handler for potential cleanup (though not critical for prototype)
+  input._cascaderCleanup = () => {
+    document.removeEventListener('click', documentClickHandler)
+    if (hoverTimeout) clearTimeout(hoverTimeout)
+  }
   
   // Initial render
   if (selectedProvince) {
