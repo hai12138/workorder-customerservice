@@ -7,12 +7,13 @@ import {
   createRecord,
   publishConfig,
   createDraft,
-  configDiff,
+    configDiff,
   putFlow,
   putSlaPolicies,
   assignWorkorder,
   runCommand,
   queryProjects,
+  updateProject,
 } from './api/workbench.js'
 import { notifyApi } from './api/notify.js'
 import { agentApi } from './api/agent.js'
@@ -220,10 +221,6 @@ function render() {
   // Initialize project filters if on projects page
   if (current === 'projects') {
     setTimeout(() => initProjectFilters(), 0)
-  }
-}
-  if (scopebar) {
-    scopebar.style.display = current === 'projects' ? 'none' : ''
   }
   
   window.scrollTo(0, 0)
