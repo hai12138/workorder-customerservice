@@ -308,30 +308,189 @@ function wechatMessagePreview() {
   )
 }
 
+// Cascader component for province-city-district selection
+function createCascader(id, initialValue = { province: '', city: '', district: '' }, requireDistrict = true) {
+  const placeholder = requireDistrict ? '请选择省 / 市 / 区' : '选择省份 / 城市 / 区县'
+  const displayText = initialValue.province 
+    ? [initialValue.province, initialValue.city, initialValue.district].filter(Boolean).join(' / ')
+    : ''
+  
+  return `<div class="cascader-wrap" id="${id}-wrap">
+    <div class="cascader-input ${displayText ? '' : 'placeholder'}" id="${id}-input" tabindex="0">
+      <span id="${id}-display">${displayText || placeholder}</span>
+    </div>
+    <span class="cascader-arrow">▼</span>
+    <div class="cascader-panel" id="${id}-panel"></div>
+    <input type="hidden" id="${id}-province" value="${initialValue.province || ''}">
+    <input type="hidden" id="${id}-city" value="${initialValue.city || ''}">
+    <input type="hidden" id="${id}-district" value="${initialValue.district || ''}">
+  </div>`
+}
+
+function initCascader(id, requireDistrict = true) {
+  const input = document.getElementById(`${id}-input`)
+  const panel = document.getElementById(`${id}-panel`)
+  const display = document.getElementById(`${id}-display`)
+  const provinceInput = document.getElementById(`${id}-province`)
+  const cityInput = document.getElementById(`${id}-city`)
+  const districtInput = document.getElementById(`${id}-district`)
+  const arrow = input?.parentElement?.querySelector('.cascader-arrow')
+  
+  if (!input || !panel) return
+  
+  let selectedProvince = provinceInput?.value || ''
+  let selectedCity = cityInput?.value || ''
+  let selectedDistrict = districtInput?.value || ''
+  
+  function updateDisplay() {
+    const parts = [selectedProvince, selectedCity, selectedDistrict].filter(Boolean)
+    if (parts.length > 0) {
+      display.textContent = parts.join(' / ')
+      input.classList.remove('placeholder')
+    } else {
+      display.textContent = requireDistrict ? '请选择省 / 市 / 区' : '选择省份 / 城市 / 区县'
+      input.classList.add('placeholder')
+    }
+    if (provinceInput) provinceInput.value = selectedProvince
+    if (cityInput) cityInput.value = selectedCity
+    if (districtInput) districtInput.value = selectedDistrict
+  }
+  
+  function closePanel() {
+    panel.classList.remove('open')
+    if (arrow) arrow.classList.remove('open')
+  }
+  
+  function renderPanel() {
+    let html = ''
+    
+    // Province column
+    html += '<div class="cascader-column">'
+    CHINA_PCA.forEach(prov => {
+      const isSelected = prov.name === selectedProvince
+      html += `<div class="cascader-item ${isSelected ? 'selected' : ''}" data-level="province" data-value="${esc(prov.name)}">${esc(prov.name)}</div>`
+    })
+    html += '</div>'
+    
+    // City column (if province selected)
+    if (selectedProvince) {
+      const province = CHINA_PCA.find(p => p.name === selectedProvince)
+      if (province) {
+        html += '<div class="cascader-column">'
+        province.cities.forEach(city => {
+          const isSelected = city.name === selectedCity
+          html += `<div class="cascader-item ${isSelected ? 'selected' : ''}" data-level="city" data-value="${esc(city.name)}">${esc(city.name)}</div>`
+        })
+        html += '</div>'
+      }
+    }
+    
+    // District column (if city selected)
+    if (selectedProvince && selectedCity) {
+      const province = CHINA_PCA.find(p => p.name === selectedProvince)
+      if (province) {
+        const city = province.cities.find(c => c.name === selectedCity)
+        if (city) {
+          html += '<div class="cascader-column">'
+          city.districts.forEach(district => {
+            const isSelected = district === selectedDistrict
+            html += `<div class="cascader-item ${isSelected ? 'selected' : ''}" data-level="district" data-value="${esc(district)}">${esc(district)}</div>`
+          })
+          html += '</div>'
+        }
+      }
+    }
+    
+    panel.innerHTML = html
+  }
+  
+  function openPanel() {
+    renderPanel()
+    panel.classList.add('open')
+    if (arrow) arrow.classList.add('open')
+  }
+  
+  input.addEventListener('click', (e) => {
+    e.stopPropagation()
+    if (panel.classList.contains('open')) {
+      closePanel()
+    } else {
+      openPanel()
+    }
+  })
+  
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      if (panel.classList.contains('open')) {
+        closePanel()
+      } else {
+        openPanel()
+      }
+    }
+  })
+  
+  panel.addEventListener('click', (e) => {
+    const item = e.target.closest('.cascader-item')
+    if (!item) return
+    
+    const level = item.dataset.level
+    const value = item.dataset.value
+    
+    if (level === 'province') {
+      selectedProvince = value
+      selectedCity = ''
+      selectedDistrict = ''
+      renderPanel()
+      updateDisplay()
+      if (!requireDistrict) {
+        // For filters, allow selecting just province
+        setTimeout(() => closePanel(), 150)
+      }
+    } else if (level === 'city') {
+      selectedCity = value
+      selectedDistrict = ''
+      renderPanel()
+      updateDisplay()
+      if (!requireDistrict) {
+        // For filters, allow selecting just city
+        setTimeout(() => closePanel(), 150)
+      }
+    } else if (level === 'district') {
+      selectedDistrict = value
+      updateDisplay()
+      setTimeout(() => closePanel(), 150)
+    }
+  })
+  
+  document.addEventListener('click', (e) => {
+    if (!input.contains(e.target) && !panel.contains(e.target)) {
+      closePanel()
+    }
+  })
+  
+  // Initial render
+  if (selectedProvince) {
+    updateDisplay()
+  }
+}
+
 function projectForm(rec) {
+  const initialPCA = {
+    province: rec?.values?.province || '',
+    city: rec?.values?.city || '',
+    district: rec?.values?.district || ''
+  }
+  
   return `<form id="demoForm">
     <div class="form-grid">
       <div class="form-row">
         <label>* 项目名称</label>
         <input id="f-title" required placeholder="例如：云栖雅苑" value="${rec ? esc(rec.title) : ''}">
       </div>
-      <div class="form-row">
-        <label>* 省份</label>
-        <select id="f-province" required>
-          <option value="">请选择省份</option>
-        </select>
-      </div>
-      <div class="form-row">
-        <label>* 城市</label>
-        <select id="f-city" required disabled>
-          <option value="">请先选择省份</option>
-        </select>
-      </div>
-      <div class="form-row">
-        <label>* 区/县</label>
-        <select id="f-district" required disabled>
-          <option value="">请先选择城市</option>
-        </select>
+      <div class="form-row full">
+        <label>* 省 / 市 / 区</label>
+        ${createCascader('f-pca', initialPCA, true)}
       </div>
       <div class="form-row">
         <label>* 详细地址</label>
@@ -383,202 +542,9 @@ let currentFilterState = {
   businessType: '全部业态'
 }
 
-// Helper function to populate PCA cascades
-function initPCACascade(rec = null) {
-  const provinceSelect = document.getElementById('f-province')
-  const citySelect = document.getElementById('f-city')
-  const districtSelect = document.getElementById('f-district')
-  
-  if (!provinceSelect) return
-  
-  // Populate provinces
-  CHINA_PCA.forEach(prov => {
-    const opt = document.createElement('option')
-    opt.value = prov.name
-    opt.textContent = prov.name
-    if (rec?.values?.province === prov.name) opt.selected = true
-    provinceSelect.appendChild(opt)
-  })
-  
-  // Handle province change
-  provinceSelect.addEventListener('change', () => {
-    const selectedProvince = provinceSelect.value
-    citySelect.innerHTML = '<option value="">请选择城市</option>'
-    districtSelect.innerHTML = '<option value="">请先选择城市</option>'
-    citySelect.disabled = !selectedProvince
-    districtSelect.disabled = true
-    
-    if (selectedProvince) {
-      const province = CHINA_PCA.find(p => p.name === selectedProvince)
-      if (province) {
-        province.cities.forEach(city => {
-          const opt = document.createElement('option')
-          opt.value = city.name
-          opt.textContent = city.name
-          citySelect.appendChild(opt)
-        })
-      }
-    }
-  })
-  
-  // Handle city change
-  citySelect.addEventListener('change', () => {
-    const selectedProvince = provinceSelect.value
-    const selectedCity = citySelect.value
-    districtSelect.innerHTML = '<option value="">请选择区/县</option>'
-    districtSelect.disabled = !selectedCity
-    
-    if (selectedProvince && selectedCity) {
-      const province = CHINA_PCA.find(p => p.name === selectedProvince)
-      if (province) {
-        const city = province.cities.find(c => c.name === selectedCity)
-        if (city) {
-          city.districts.forEach(district => {
-            const opt = document.createElement('option')
-            opt.value = district
-            opt.textContent = district
-            districtSelect.appendChild(opt)
-          })
-        }
-      }
-    }
-  })
-  
-  // If editing, populate city and district
-  if (rec?.values?.province) {
-    const province = CHINA_PCA.find(p => p.name === rec.values.province)
-    if (province) {
-      citySelect.innerHTML = '<option value="">请选择城市</option>'
-      province.cities.forEach(city => {
-        const opt = document.createElement('option')
-        opt.value = city.name
-        opt.textContent = city.name
-        if (rec.values.city === city.name) opt.selected = true
-        citySelect.appendChild(opt)
-      })
-      citySelect.disabled = false
-      
-      if (rec.values.city) {
-        const city = province.cities.find(c => c.name === rec.values.city)
-        if (city) {
-          districtSelect.innerHTML = '<option value="">请选择区/县</option>'
-          city.districts.forEach(district => {
-            const opt = document.createElement('option')
-            opt.value = district
-            opt.textContent = district
-            if (rec.values.district === district) opt.selected = true
-            districtSelect.appendChild(opt)
-          })
-          districtSelect.disabled = false
-        }
-      }
-    }
-  }
-}
 
 // Helper function to initialize project page filters
 function initProjectFilters() {
-  const provinceFilter = document.getElementById('province-select')
-  const cityFilter = document.getElementById('city-select')
-  const districtFilter = document.getElementById('district-select')
-  
-  if (!provinceFilter) return
-  
-  // Populate province filter
-  CHINA_PCA.forEach(prov => {
-    const opt = document.createElement('option')
-    opt.value = prov.name
-    opt.textContent = prov.name
-    if (currentFilterState.province === prov.name) opt.selected = true
-    provinceFilter.appendChild(opt)
-  })
-  
-  // Handle province filter change
-  provinceFilter.addEventListener('change', () => {
-    const selectedProvince = provinceFilter.value
-    cityFilter.innerHTML = '<option value="">全部城市</option>'
-    districtFilter.innerHTML = '<option value="">全部区县</option>'
-    cityFilter.disabled = !selectedProvince
-    districtFilter.disabled = true
-    currentFilterState.province = selectedProvince
-    currentFilterState.city = ''
-    currentFilterState.district = ''
-    
-    if (selectedProvince) {
-      const province = CHINA_PCA.find(p => p.name === selectedProvince)
-      if (province) {
-        province.cities.forEach(city => {
-          const opt = document.createElement('option')
-          opt.value = city.name
-          opt.textContent = city.name
-          cityFilter.appendChild(opt)
-        })
-      }
-    }
-  })
-  
-  // Handle city filter change
-  cityFilter.addEventListener('change', () => {
-    const selectedProvince = provinceFilter.value
-    const selectedCity = cityFilter.value
-    districtFilter.innerHTML = '<option value="">全部区县</option>'
-    districtFilter.disabled = !selectedCity
-    currentFilterState.city = selectedCity
-    currentFilterState.district = ''
-    
-    if (selectedProvince && selectedCity) {
-      const province = CHINA_PCA.find(p => p.name === selectedProvince)
-      if (province) {
-        const city = province.cities.find(c => c.name === selectedCity)
-        if (city) {
-          city.districts.forEach(district => {
-            const opt = document.createElement('option')
-            opt.value = district
-            opt.textContent = district
-            districtFilter.appendChild(opt)
-          })
-        }
-      }
-    }
-  })
-  
-  // Handle district filter change
-  districtFilter.addEventListener('change', () => {
-    currentFilterState.district = districtFilter.value
-  })
-  
-  // Restore filter state
-  if (currentFilterState.province) {
-    const province = CHINA_PCA.find(p => p.name === currentFilterState.province)
-    if (province) {
-      cityFilter.innerHTML = '<option value="">全部城市</option>'
-      province.cities.forEach(city => {
-        const opt = document.createElement('option')
-        opt.value = city.name
-        opt.textContent = city.name
-        if (currentFilterState.city === city.name) opt.selected = true
-        cityFilter.appendChild(opt)
-      })
-      cityFilter.disabled = false
-      
-      if (currentFilterState.city) {
-        const city = province.cities.find(c => c.name === currentFilterState.city)
-        if (city) {
-          districtFilter.innerHTML = '<option value="">全部区县</option>'
-          city.districts.forEach(district => {
-            const opt = document.createElement('option')
-            opt.value = district
-            opt.textContent = district
-            if (currentFilterState.district === district) opt.selected = true
-            districtFilter.appendChild(opt)
-          })
-          districtFilter.disabled = false
-        }
-      }
-    }
-  }
-  
-  // Restore other filter values
   const keywordInput = document.getElementById('keyword')
   const statusSelect = document.getElementById('status-select')
   const businessTypeSelect = document.getElementById('businessType-select')
@@ -586,6 +552,30 @@ function initProjectFilters() {
   if (keywordInput) keywordInput.value = currentFilterState.keyword
   if (statusSelect) statusSelect.value = currentFilterState.status
   if (businessTypeSelect) businessTypeSelect.value = currentFilterState.businessType
+  
+  // Initialize cascader with current filter state
+  const initialPCA = {
+    province: currentFilterState.province || '',
+    city: currentFilterState.city || '',
+    district: currentFilterState.district || ''
+  }
+  
+  // Set the hidden inputs to current state
+  const provinceInput = document.getElementById('filter-pca-province')
+  const cityInput = document.getElementById('filter-pca-city')
+  const districtInput = document.getElementById('filter-pca-district')
+  const display = document.getElementById('filter-pca-display')
+  const input = document.getElementById('filter-pca-input')
+  
+  if (provinceInput && initialPCA.province) {
+    const parts = [initialPCA.province, initialPCA.city, initialPCA.district].filter(Boolean)
+    if (parts.length > 0 && display && input) {
+      display.textContent = parts.join(' / ')
+      input.classList.remove('placeholder')
+    }
+  }
+  
+  initCascader('filter-pca', false)
 }
 
 
@@ -620,9 +610,9 @@ async function handleAction(act, a) {
       if (current === 'projects') {
         const keyword = document.getElementById('keyword')?.value?.trim() || ''
         const statusSelect = document.getElementById('status-select')?.value || ''
-        const provinceSelect = document.getElementById('province-select')?.value || ''
-        const citySelect = document.getElementById('city-select')?.value || ''
-        const districtSelect = document.getElementById('district-select')?.value || ''
+        const provinceSelect = document.getElementById('filter-pca-province')?.value || ''
+        const citySelect = document.getElementById('filter-pca-city')?.value || ''
+        const districtSelect = document.getElementById('filter-pca-district')?.value || ''
         const businessTypeSelect = document.getElementById('businessType-select')?.value || ''
         
         // Save filter state using both methods
@@ -652,6 +642,18 @@ async function handleAction(act, a) {
       if (k) k.value = ''
       const selects = document.querySelectorAll('.filters select')
       selects.forEach((s) => (s.selectedIndex = 0))
+      
+      // Reset cascader
+      const pcaProvince = document.getElementById('filter-pca-province')
+      const pcaCity = document.getElementById('filter-pca-city')
+      const pcaDistrict = document.getElementById('filter-pca-district')
+      const pcaDisplay = document.getElementById('filter-pca-display')
+      const pcaInput = document.getElementById('filter-pca-input')
+      if (pcaProvince) pcaProvince.value = ''
+      if (pcaCity) pcaCity.value = ''
+      if (pcaDistrict) pcaDistrict.value = ''
+      if (pcaDisplay) pcaDisplay.textContent = '选择省份 / 城市 / 区县'
+      if (pcaInput) pcaInput.classList.add('placeholder')
       
       // Reset filter state
       currentFilterState = {
@@ -705,7 +707,7 @@ async function handleAction(act, a) {
     }
     if (act === 'new-project') {
       modal('新建项目', projectForm(null), `<button class="btn" data-action="close">取消</button><button class="btn primary" data-action="save-project">保存</button>`)
-      setTimeout(() => initPCACascade(), 0)
+      setTimeout(() => initCascader('f-pca', true), 0)
       return
     }
     if (act === 'project-edit') {
@@ -713,14 +715,14 @@ async function handleAction(act, a) {
       const rec = records('projects').find((x) => x.id === id)
       if (!rec) return toast('未找到项目')
       modal('编辑项目', projectForm(rec), `<button class="btn" data-action="close">取消</button><button class="btn primary" data-action="save-project" data-id="${id}">保存</button>`)
-      setTimeout(() => initPCACascade(rec), 0)
+      setTimeout(() => initCascader('f-pca', true), 0)
       return
     }
     if (act === 'save-project') {
       const title = document.getElementById('f-title')?.value?.trim()
-      const province = document.getElementById('f-province')?.value?.trim() || ''
-      const city = document.getElementById('f-city')?.value?.trim() || ''
-      const district = document.getElementById('f-district')?.value?.trim() || ''
+      const province = document.getElementById('f-pca-province')?.value?.trim() || ''
+      const city = document.getElementById('f-pca-city')?.value?.trim() || ''
+      const district = document.getElementById('f-pca-district')?.value?.trim() || ''
       const address = document.getElementById('f-address')?.value?.trim() || ''
       const businessType = document.getElementById('f-businessType')?.value?.trim() || ''
       const longitude = document.getElementById('f-longitude')?.value?.trim()
