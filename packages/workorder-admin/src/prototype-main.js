@@ -221,10 +221,6 @@ function render() {
   if (current === 'projects') {
     setTimeout(() => initProjectFilters(), 0)
   }
-}
-  if (scopebar) {
-    scopebar.style.display = current === 'projects' ? 'none' : ''
-  }
   
   window.scrollTo(0, 0)
 }
