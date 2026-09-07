@@ -2,7 +2,7 @@ import shell from './prototype-shell.html?raw'
 import * as P from './adapters/pages.js'
 import { badge } from './adapters/ui.js'
 import { clearSession, getSession, setProjectId } from './store/session.js'
-import { loadBootstrap, refresh, records, getSnapshot, setFilteredProjects, clearFilteredProjects, setProjectsFilterState, clearProjectsFilterState, setSpacesCache, getSpacesCache, setSelectedSpaceId, clearSelectedSpaceId, setSpacesFilterState, clearSpacesFilterState } from './store/app-state.js'
+import { loadBootstrap, refresh, records, getSnapshot, setFilteredProjects, clearFilteredProjects, setProjectsFilterState, clearProjectsFilterState, setSpacesCache, getSpacesCache, setSelectedSpaceId, clearSelectedSpaceId, setSpacesFilterKeyword, clearSpacesFilterKeyword } from './store/app-state.js'
 import {
   createRecord,
   publishConfig,
@@ -933,10 +933,7 @@ async function handleAction(act, a) {
         }
       } else if (current === 'spaces') {
         const keyword = document.getElementById('keyword')?.value?.trim() || ''
-        const statusSelect = document.getElementById('status-select')?.value || '全部状态'
-        const typeSelect = document.getElementById('type-select')?.value || '全部类型'
-        
-        setSpacesFilterState(keyword, statusSelect, typeSelect)
+        setSpacesFilterKeyword(keyword)
         render()
         toast('筛选条件已应用')
       } else {
@@ -977,7 +974,7 @@ async function handleAction(act, a) {
         clearProjectsFilterState()
         render()
       } else if (current === 'spaces') {
-        clearSpacesFilterState()
+        clearSpacesFilterKeyword()
         render()
       }
       toast('筛选条件已重置')
