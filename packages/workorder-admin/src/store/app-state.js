@@ -9,6 +9,7 @@ let loading = null
 let filteredProjects = null
 let projectsFilterState = { keyword: '', status: '', province: '', city: '', district: '', businessType: '' }
 let spacesCache = null
+let selectedSpaceId = null
 
 export function getSnapshot() {
   return snapshot
@@ -79,4 +80,16 @@ export function getSpacesCache() {
 
 export function setSpacesCache(data) {
   spacesCache = data
+}
+
+export function getSelectedSpaceId() {
+  return selectedSpaceId
+}
+
+export function setSelectedSpaceId(id) {
+  selectedSpaceId = id
+}
+
+export function clearSelectedSpaceId() {
+  selectedSpaceId = null
 }

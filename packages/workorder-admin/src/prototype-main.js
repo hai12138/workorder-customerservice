@@ -2,7 +2,7 @@ import shell from './prototype-shell.html?raw'
 import * as P from './adapters/pages.js'
 import { badge } from './adapters/ui.js'
 import { clearSession, getSession, setProjectId } from './store/session.js'
-import { loadBootstrap, refresh, records, getSnapshot, setFilteredProjects, clearFilteredProjects, setProjectsFilterState, clearProjectsFilterState, setSpacesCache, getSpacesCache } from './store/app-state.js'
+import { loadBootstrap, refresh, records, getSnapshot, setFilteredProjects, clearFilteredProjects, setProjectsFilterState, clearProjectsFilterState, setSpacesCache, getSpacesCache, setSelectedSpaceId, clearSelectedSpaceId } from './store/app-state.js'
 import {
   createRecord,
   publishConfig,
@@ -50,6 +50,7 @@ async function fillProjects() {
 }
 projectSelect?.addEventListener('change', async () => {
   setProjectId(projectSelect.value)
+  clearSelectedSpaceId()
   toast('正在切换项目…')
   try {
     await refresh()
@@ -263,6 +264,12 @@ function nav(p) {
   if (!pages[p]) return
   document.getElementById('portal').innerHTML = ''
   document.querySelectorAll('.menu-pop').forEach((x) => x.remove())
+  
+  // Clear space filter when leaving spaces page
+  if (current === 'spaces' && p !== 'spaces') {
+    clearSelectedSpaceId()
+  }
+  
   current = p
   location.hash = p
   render()
@@ -1138,6 +1145,19 @@ async function handleAction(act, a) {
           <div style="grid-column:1/-1"><span>更新时间</span><b>${updatedAt}</b></div>
         </div>`,
       )
+      return
+    }
+    if (act === 'select-space-node') {
+      const spaceId = a.dataset.spaceId
+      const isRoot = a.dataset.isRoot === 'true'
+      
+      if (isRoot || spaceId === 'root') {
+        clearSelectedSpaceId()
+      } else {
+        setSelectedSpaceId(spaceId)
+      }
+      
+      render()
       return
     }
     if (['new-person', 'person-edit', 'person-detail', 'new-role', 'new-type', 'type-detail', 'new-field', 'new-rule', 'new-plan', 'new-agent-app'].includes(act)) {
