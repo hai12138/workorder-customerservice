@@ -2,7 +2,9 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateSpaceDto, SpaceType, SpaceStatus } from './dto/create-space.dto';
 import { UpdateSpaceDto } from './dto/update-space.dto';
+import { ImportError, ImportResult } from './dto/import-space.dto';
 import { SpaceType as PrismaSpaceType, SpaceStatus as PrismaSpaceStatus } from '@prisma/client';
+import * as XLSX from 'xlsx';
 
 interface SpaceNode {
   id: string;
@@ -268,5 +270,204 @@ export class SpaceService {
     });
 
     return { id };
+  }
+
+  async generateTemplate(): Promise<Buffer> {
+    const headers = ['name', 'type', 'status', 'parentName'];
+    const exampleRows = [
+      ['A栋', '楼栋', '可用', ''],
+      ['A栋1层', '楼层', '可用', 'A栋'],
+      ['A栋101', '房间', '可用', 'A栋1层'],
+      ['公共区域', '公区', '可用', ''],
+      ['车位A01', '车位', '可用', ''],
+    ];
+
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...exampleRows]);
+    
+    worksheet['!cols'] = [
+      { wch: 20 },
+      { wch: 10 },
+      { wch: 10 },
+      { wch: 20 },
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Spaces');
+
+    return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+  }
+
+  async importSpaces(file: Express.Multer.File, projectId: string): Promise<ImportResult> {
+    if (!file) {
+      throw new BadRequestException('未上传文件');
+    }
+
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+    });
+    if (!project) {
+      throw new NotFoundException('项目不存在');
+    }
+
+    let workbook: XLSX.WorkBook;
+    try {
+      workbook = XLSX.read(file.buffer, { type: 'buffer' });
+    } catch (error) {
+      throw new BadRequestException('无效的文件格式');
+    }
+
+    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows: any[][] = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+
+    if (rows.length === 0) {
+      throw new BadRequestException('文件为空');
+    }
+
+    const headers = rows[0];
+    const requiredHeaders = ['name', 'type', 'status', 'parentName'];
+    
+    for (const header of requiredHeaders) {
+      if (!headers.includes(header)) {
+        throw new BadRequestException(`缺少必需列: ${header}`);
+      }
+    }
+
+    const headerIndexMap: Record<string, number> = {};
+    headers.forEach((header, index) => {
+      headerIndexMap[header] = index;
+    });
+
+    const dataRows = rows.slice(1).filter(row => row.length > 0 && row.some(cell => cell !== undefined && cell !== ''));
+
+    if (dataRows.length === 0) {
+      throw new BadRequestException('没有数据行');
+    }
+
+    const errors: ImportError[] = [];
+    const validRows: Array<{
+      name: string;
+      type: SpaceType;
+      status: SpaceStatus;
+      parentName: string | null;
+      rowIndex: number;
+    }> = [];
+
+    const validTypes = Object.values(SpaceType);
+    const validStatuses = Object.values(SpaceStatus);
+
+    for (let i = 0; i < dataRows.length; i++) {
+      const row = dataRows[i];
+      const rowNumber = i + 2;
+
+      const name = row[headerIndexMap['name']]?.toString().trim() || '';
+      const type = row[headerIndexMap['type']]?.toString().trim() || '';
+      const status = row[headerIndexMap['status']]?.toString().trim() || '';
+      const parentName = row[headerIndexMap['parentName']]?.toString().trim() || null;
+
+      if (!name) {
+        errors.push({ row: rowNumber, field: 'name', message: '空间名称不能为空' });
+        continue;
+      }
+
+      if (!type) {
+        errors.push({ row: rowNumber, field: 'type', message: '类型不能为空' });
+        continue;
+      }
+
+      if (!validTypes.includes(type as SpaceType)) {
+        errors.push({
+          row: rowNumber,
+          field: 'type',
+          message: `无效的类型: ${type}，必须是以下之一: ${validTypes.join(', ')}`,
+        });
+        continue;
+      }
+
+      const finalStatus = status || SpaceStatus.AVAILABLE;
+      if (!validStatuses.includes(finalStatus as SpaceStatus)) {
+        errors.push({
+          row: rowNumber,
+          field: 'status',
+          message: `无效的状态: ${status}，必须是以下之一: ${validStatuses.join(', ')}`,
+        });
+        continue;
+      }
+
+      validRows.push({
+        name,
+        type: type as SpaceType,
+        status: finalStatus as SpaceStatus,
+        parentName: parentName || null,
+        rowIndex: rowNumber,
+      });
+    }
+
+    if (errors.length > 0) {
+      throw new BadRequestException({
+        message: '数据验证失败',
+        errors,
+      });
+    }
+
+    const spaceMap = new Map<string, string>();
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        for (const validRow of validRows) {
+          let parentId: string | null = null;
+
+          if (validRow.parentName) {
+            parentId = spaceMap.get(validRow.parentName) || null;
+
+            if (!parentId) {
+              const existingParent = await tx.space.findFirst({
+                where: {
+                  projectId,
+                  name: validRow.parentName,
+                },
+              });
+
+              if (existingParent) {
+                parentId = existingParent.id;
+                spaceMap.set(validRow.parentName, existingParent.id);
+              } else {
+                throw new BadRequestException({
+                  message: '数据验证失败',
+                  errors: [
+                    {
+                      row: validRow.rowIndex,
+                      field: 'parentName',
+                      message: `父级空间不存在: ${validRow.parentName}`,
+                    },
+                  ],
+                });
+              }
+            }
+          }
+
+          const createdSpace = await tx.space.create({
+            data: {
+              projectId,
+              parentId,
+              name: validRow.name,
+              type: mapTypeToDb(validRow.type),
+              status: mapStatusToDb(validRow.status),
+            },
+          });
+
+          spaceMap.set(validRow.name, createdSpace.id);
+        }
+      });
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException('导入失败: ' + (error as Error).message);
+    }
+
+    return {
+      success: true,
+      imported: validRows.length,
+    };
   }
 }
