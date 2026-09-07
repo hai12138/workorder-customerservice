@@ -273,6 +273,12 @@ export class SpaceService {
   }
 
   async generateTemplate(): Promise<Buffer> {
+    const instructionRow = [
+      '必填：空间名称',
+      '必填：楼栋|楼层|房间|公区|车位',
+      '可选：可用|停用（默认可用）',
+      '可选：父级空间名称（精确匹配；留空表示根级）',
+    ];
     const headers = ['name', 'type', 'status', 'parentName'];
     const exampleRows = [
       ['A栋', '楼栋', '可用', ''],
@@ -282,13 +288,13 @@ export class SpaceService {
       ['车位A01', '车位', '可用', ''],
     ];
 
-    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...exampleRows]);
+    const worksheet = XLSX.utils.aoa_to_sheet([instructionRow, headers, ...exampleRows]);
     
     worksheet['!cols'] = [
-      { wch: 20 },
-      { wch: 10 },
-      { wch: 10 },
-      { wch: 20 },
+      { wch: 25 },
+      { wch: 35 },
+      { wch: 30 },
+      { wch: 40 },
     ];
 
     const workbook = XLSX.utils.book_new();
@@ -323,7 +329,21 @@ export class SpaceService {
       throw new BadRequestException('文件为空');
     }
 
-    const headers = rows[0];
+    let headerRowIndex = 0;
+    let dataStartIndex = 1;
+    
+    const firstRow = rows[0];
+    const firstCell = firstRow && firstRow[0] ? firstRow[0].toString() : '';
+    if (firstCell.includes('必填') || firstCell.includes('可选')) {
+      headerRowIndex = 1;
+      dataStartIndex = 2;
+    }
+
+    if (rows.length <= headerRowIndex) {
+      throw new BadRequestException('文件格式错误：缺少表头行');
+    }
+
+    const headers = rows[headerRowIndex];
     const requiredHeaders = ['name', 'type', 'status', 'parentName'];
     
     for (const header of requiredHeaders) {
@@ -337,7 +357,7 @@ export class SpaceService {
       headerIndexMap[header] = index;
     });
 
-    const dataRows = rows.slice(1).filter(row => row.length > 0 && row.some(cell => cell !== undefined && cell !== ''));
+    const dataRows = rows.slice(dataStartIndex).filter(row => row.length > 0 && row.some(cell => cell !== undefined && cell !== ''));
 
     if (dataRows.length === 0) {
       throw new BadRequestException('没有数据行');
@@ -357,7 +377,7 @@ export class SpaceService {
 
     for (let i = 0; i < dataRows.length; i++) {
       const row = dataRows[i];
-      const rowNumber = i + 2;
+      const rowNumber = i + dataStartIndex + 1;
 
       const name = row[headerIndexMap['name']]?.toString().trim() || '';
       const type = row[headerIndexMap['type']]?.toString().trim() || '';
