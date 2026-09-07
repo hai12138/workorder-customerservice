@@ -167,22 +167,29 @@ export function spaces() {
   }
   
   // Build tree HTML with click handlers and highlighting
+  // Cap visual tree at level 3 - deeper nodes are not rendered as tree-rows
   const buildTreeHtml = (node, level = 1) => {
     let html = ''
-    const icon = level === 1 ? '⌂' : level === 2 ? '▤' : ''
-    const levelClass = level === 1 ? 'on' : level === 2 ? 'l2' : 'l3'
-    const isSelected = node.id === selectedSpaceId || (level === 1 && !selectedSpaceId)
-    const selectedClass = isSelected ? 'selected' : ''
-    const nodeId = node.id || 'root'
-    const isRoot = node.isRoot || level === 1
     
-    html += `<div class="tree-row ${levelClass} ${selectedClass}" data-action="select-space-node" data-space-id="${nodeId}" data-is-root="${isRoot}">${icon ? icon + ' ' : ''}${esc(node.name)}</div>`
-    
-    if (node.children && node.children.length > 0) {
-      for (const child of node.children) {
-        html += buildTreeHtml(child, level + 1)
+    // Only render up to level 3
+    if (level <= 3) {
+      const icon = level === 1 ? '⌂' : level === 2 ? '▤' : ''
+      const levelClass = level === 1 ? 'on' : level === 2 ? 'l2' : 'l3'
+      const isSelected = node.id === selectedSpaceId || (level === 1 && !selectedSpaceId)
+      const selectedClass = isSelected ? 'selected' : ''
+      const nodeId = node.id || 'root'
+      const isRoot = node.isRoot || level === 1
+      
+      html += `<div class="tree-row ${levelClass} ${selectedClass}" data-action="select-space-node" data-space-id="${nodeId}" data-is-root="${isRoot}">${icon ? icon + ' ' : ''}${esc(node.name)}</div>`
+      
+      // Continue rendering children only if we're not at level 3 yet
+      if (node.children && node.children.length > 0 && level < 3) {
+        for (const child of node.children) {
+          html += buildTreeHtml(child, level + 1)
+        }
       }
     }
+    
     return html
   }
   

@@ -701,6 +701,136 @@ function esc(str) {
   return div.innerHTML
 }
 
+// Helper to build tree-shaped parent picker
+function buildParentTreePicker(spaces, currentSpaceId = null, selectedParentId = null) {
+  if (!spaces || spaces.length === 0) {
+    return '<div class="tree-picker-empty">暂无可选空间</div>'
+  }
+  
+  // Build tree structure
+  const spaceMap = new Map()
+  spaces.forEach(s => spaceMap.set(s.id, { ...s, children: [] }))
+  
+  const rootNodes = []
+  spaces.forEach(s => {
+    const node = spaceMap.get(s.id)
+    if (!s.parentId) {
+      rootNodes.push(node)
+    } else {
+      const parent = spaceMap.get(s.parentId)
+      if (parent) parent.children.push(node)
+    }
+  })
+  
+  // Get descendants of current space (to disable them)
+  const getDescendantIds = (spaceId) => {
+    const ids = new Set([spaceId])
+    const space = spaceMap.get(spaceId)
+    if (space && space.children) {
+      space.children.forEach(child => {
+        getDescendantIds(child.id).forEach(id => ids.add(id))
+      })
+    }
+    return ids
+  }
+  
+  const disabledIds = currentSpaceId ? getDescendantIds(currentSpaceId) : new Set()
+  
+  // Render tree with expand/collapse
+  const renderNode = (node, level = 1, path = []) => {
+    const hasChildren = node.children && node.children.length > 0
+    const isDisabled = disabledIds.has(node.id)
+    const isSelected = node.id === selectedParentId
+    const indent = (level - 1) * 20
+    
+    let html = `<div class="tree-picker-item ${isDisabled ? 'disabled' : ''} ${isSelected ? 'selected' : ''}" 
+                     data-space-id="${esc(node.id)}" 
+                     data-disabled="${isDisabled}"
+                     style="padding-left: ${indent}px">`
+    
+    if (hasChildren) {
+      html += `<span class="tree-picker-expand" data-space-id="${esc(node.id)}">▸</span>`
+    } else {
+      html += `<span class="tree-picker-spacer"></span>`
+    }
+    
+    html += `<span class="tree-picker-label">${esc(node.name)}</span>`
+    html += `</div>`
+    
+    if (hasChildren) {
+      html += `<div class="tree-picker-children" data-parent-id="${esc(node.id)}" style="display: none;">`
+      node.children.forEach(child => {
+        html += renderNode(child, level + 1, [...path, node.id])
+      })
+      html += `</div>`
+    }
+    
+    return html
+  }
+  
+  let html = '<div class="tree-picker">'
+  html += `<div class="tree-picker-item no-parent" data-space-id="" data-disabled="false">
+    <span class="tree-picker-spacer"></span>
+    <span class="tree-picker-label">无上级（项目根节点）</span>
+  </div>`
+  
+  rootNodes.forEach(node => {
+    html += renderNode(node)
+  })
+  
+  html += '</div>'
+  return html
+}
+
+// Initialize tree picker interaction
+function initTreePicker(containerId, onSelect) {
+  const container = document.getElementById(containerId)
+  if (!container) return
+  
+  let selectedId = null
+  
+  // Handle expand/collapse
+  container.addEventListener('click', (e) => {
+    const expandBtn = e.target.closest('.tree-picker-expand')
+    if (expandBtn) {
+      e.stopPropagation()
+      const spaceId = expandBtn.dataset.spaceId
+      const childrenDiv = container.querySelector(`.tree-picker-children[data-parent-id="${spaceId}"]`)
+      if (childrenDiv) {
+        const isExpanded = childrenDiv.style.display !== 'none'
+        childrenDiv.style.display = isExpanded ? 'none' : 'block'
+        expandBtn.textContent = isExpanded ? '▸' : '▾'
+      }
+      return
+    }
+    
+    // Handle selection
+    const item = e.target.closest('.tree-picker-item')
+    if (item && item.dataset.disabled !== 'true') {
+      const spaceId = item.dataset.spaceId
+      
+      // Update UI
+      container.querySelectorAll('.tree-picker-item').forEach(el => {
+        el.classList.remove('selected')
+      })
+      item.classList.add('selected')
+      
+      selectedId = spaceId
+      if (onSelect) onSelect(spaceId)
+    }
+  })
+  
+  return {
+    getSelectedId: () => selectedId,
+    setSelectedId: (id) => {
+      selectedId = id
+      container.querySelectorAll('.tree-picker-item').forEach(el => {
+        el.classList.toggle('selected', el.dataset.spaceId === id)
+      })
+    }
+  }
+}
+
 // Store filter state globally
 let currentFilterState = {
   keyword: '',
@@ -933,9 +1063,7 @@ async function handleAction(act, a) {
     if (act === 'new-space') {
       const cache = getSpacesCache()
       const spaces = cache?.list || []
-      const spaceOptions = spaces.length > 0 
-        ? `<option value="">无（作为根层空间）</option>` + spaces.map(s => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')
-        : `<option value="">无（作为根层空间）</option>`
+      const parentTreeHtml = buildParentTreePicker(spaces, null, null)
       
       modal(
         '新增空间',
@@ -963,11 +1091,20 @@ async function handleAction(act, a) {
           </div>
           <div class="form-row full">
             <label>上级空间</label>
-            <select id="f-parent">${spaceOptions}</select>
+            <div class="tree-picker-container" id="parent-picker-container">
+              ${parentTreeHtml}
+            </div>
+            <input type="hidden" id="f-parent" value="">
           </div>
         </div>`,
         `<button class="btn" data-action="close">取消</button><button class="btn primary" data-action="save-space">保存</button>`,
       )
+      
+      setTimeout(() => {
+        initTreePicker('parent-picker-container', (spaceId) => {
+          document.getElementById('f-parent').value = spaceId
+        })
+      }, 0)
       return
     }
     if (act === 'save-space') {
@@ -998,10 +1135,7 @@ async function handleAction(act, a) {
       const space = spaces.find((x) => x.id === a.dataset.id)
       if (!space) return toast('未找到空间')
       
-      const spaceOptions = spaces
-        .filter(s => s.id !== space.id)
-        .map(s => `<option value="${esc(s.id)}" ${s.id === space.parentId ? 'selected' : ''}>${esc(s.name)}</option>`)
-        .join('')
+      const parentTreeHtml = buildParentTreePicker(spaces, space.id, space.parentId || '')
       
       modal(
         '编辑空间',
@@ -1029,14 +1163,25 @@ async function handleAction(act, a) {
           </div>
           <div class="form-row full">
             <label>上级空间</label>
-            <select id="f-parent">
-              <option value="">无（作为根层空间）</option>
-              ${spaceOptions}
-            </select>
+            <div class="tree-picker-container" id="parent-picker-container">
+              ${parentTreeHtml}
+            </div>
+            <input type="hidden" id="f-parent" value="${esc(space.parentId || '')}">
           </div>
         </div>`,
         `<button class="btn" data-action="close">取消</button><button class="btn primary" data-action="save-space" data-id="${esc(space.id)}">保存</button>`,
       )
+      
+      setTimeout(() => {
+        const picker = initTreePicker('parent-picker-container', (spaceId) => {
+          document.getElementById('f-parent').value = spaceId
+        })
+        if (space.parentId) {
+          picker.setSelectedId(space.parentId)
+        } else {
+          picker.setSelectedId('')
+        }
+      }, 0)
       return
     }
     if (act === 'space-delete') {
