@@ -329,6 +329,178 @@ describe('Space Import API (e2e)', () => {
     });
   });
 
+  describe('Product Acceptance - DoD', () => {
+    it('should reject duplicate name in same import', async () => {
+      const importData = [
+        ['name', 'type', 'status', 'parentName'],
+        ['Duplicate重复', '楼栋', '可用', ''],
+        ['Duplicate重复', '楼层', '可用', ''],
+      ];
+
+      const buffer = createExcelBuffer(importData);
+
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/spaces/import')
+        .set('Authorization', AUTH)
+        .field('projectId', testProjectId)
+        .attach('file', buffer, 'test.xlsx')
+        .expect(200);
+
+      expect(response.body.code).toBe(400);
+      
+      const listResponse = await request(app.getHttpServer())
+        .get(`/api/v1/spaces?projectId=${testProjectId}`)
+        .set('Authorization', AUTH);
+
+      const imported = listResponse.body.data.filter((s: any) => s.name === 'Duplicate重复');
+      expect(imported.length).toBe(0);
+    });
+
+    it('should not write into other projects', async () => {
+      const projectsResponse = await request(app.getHttpServer())
+        .get('/api/v1/projects')
+        .set('Authorization', AUTH);
+      
+      if (projectsResponse.body.data && projectsResponse.body.data.length < 2) {
+        return;
+      }
+
+      const otherProjectId = projectsResponse.body.data.find((p: any) => p.id !== testProjectId)?.id;
+      if (!otherProjectId) return;
+
+      const beforeCount = await request(app.getHttpServer())
+        .get(`/api/v1/spaces?projectId=${otherProjectId}`)
+        .set('Authorization', AUTH);
+
+      const importData = [
+        ['name', 'type', 'status', 'parentName'],
+        ['CrossProject跨项目', '楼栋', '可用', ''],
+      ];
+
+      const buffer = createExcelBuffer(importData);
+
+      await request(app.getHttpServer())
+        .post('/api/v1/spaces/import')
+        .set('Authorization', AUTH)
+        .field('projectId', testProjectId)
+        .attach('file', buffer, 'test.xlsx')
+        .expect(200);
+
+      const afterResponse = await request(app.getHttpServer())
+        .get(`/api/v1/spaces?projectId=${otherProjectId}`)
+        .set('Authorization', AUTH);
+
+      expect(afterResponse.body.data.length).toBe(beforeCount.body.data.length);
+
+      const inCorrectProject = await request(app.getHttpServer())
+        .get(`/api/v1/spaces?projectId=${testProjectId}`)
+        .set('Authorization', AUTH);
+
+      const imported = inCorrectProject.body.data.find((s: any) => s.name === 'CrossProject跨项目');
+      expect(imported).toBeDefined();
+      expect(imported.projectId).toBe(testProjectId);
+      createdSpaceIds.push(imported.id);
+    });
+
+    it('should verify empty parent creates first-level node', async () => {
+      const importData = [
+        ['name', 'type', 'status', 'parentName'],
+        ['FirstLevel根级', '楼栋', '可用', ''],
+      ];
+
+      const buffer = createExcelBuffer(importData);
+
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/spaces/import')
+        .set('Authorization', AUTH)
+        .field('projectId', testProjectId)
+        .attach('file', buffer, 'test.xlsx')
+        .expect(200);
+
+      expect(response.body.code).toBe(0);
+
+      const listResponse = await request(app.getHttpServer())
+        .get(`/api/v1/spaces?projectId=${testProjectId}`)
+        .set('Authorization', AUTH);
+
+      const imported = listResponse.body.data.find((s: any) => s.name === 'FirstLevel根级');
+      expect(imported).toBeDefined();
+      expect(imported.parentId).toBeNull();
+      createdSpaceIds.push(imported.id);
+    });
+
+    it('should not regress: delete-with-children still forbidden', async () => {
+      const createParent = await request(app.getHttpServer())
+        .post('/api/v1/spaces')
+        .set('Authorization', AUTH)
+        .send({
+          projectId: testProjectId,
+          name: 'RegTest父级',
+          type: '楼栋',
+        })
+        .expect(200);
+
+      const parentId = createParent.body.data.id;
+      createdSpaceIds.push(parentId);
+
+      const createChild = await request(app.getHttpServer())
+        .post('/api/v1/spaces')
+        .set('Authorization', AUTH)
+        .send({
+          projectId: testProjectId,
+          parentId,
+          name: 'RegTest子级',
+          type: '楼层',
+        })
+        .expect(200);
+
+      createdSpaceIds.push(createChild.body.data.id);
+
+      const deleteResponse = await request(app.getHttpServer())
+        .delete(`/api/v1/spaces/${parentId}`)
+        .set('Authorization', AUTH)
+        .expect(200);
+
+      expect(deleteResponse.body.code).toBe(400);
+      expect(deleteResponse.body.message).toContain('存在子空间');
+    });
+
+    it('should not regress: tree root still uses project name', async () => {
+      const treeResponse = await request(app.getHttpServer())
+        .get(`/api/v1/spaces?projectId=${testProjectId}&tree=true`)
+        .set('Authorization', AUTH)
+        .expect(200);
+
+      expect(treeResponse.body.code).toBe(0);
+      expect(treeResponse.body.data).toHaveProperty('isRoot', true);
+      expect(treeResponse.body.data.id).toContain('project_');
+      expect(treeResponse.body.data).toHaveProperty('name');
+      expect(treeResponse.body.data).toHaveProperty('children');
+    });
+
+    it('should not regress: Chinese enums still work', async () => {
+      const types = ['楼栋', '楼层', '房间', '公区', '车位'];
+      const statuses = ['可用', '停用'];
+
+      for (const type of types) {
+        const response = await request(app.getHttpServer())
+          .post('/api/v1/spaces')
+          .set('Authorization', AUTH)
+          .send({
+            projectId: testProjectId,
+            name: `枚举测试${type}`,
+            type,
+            status: statuses[0],
+          })
+          .expect(200);
+
+        expect(response.body.code).toBe(0);
+        expect(response.body.data.type).toBe(type);
+        createdSpaceIds.push(response.body.data.id);
+      }
+    });
+  });
+
   describe('Edge Cases', () => {
     it('should reject empty file', async () => {
       const importData = [

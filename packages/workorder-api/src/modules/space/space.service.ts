@@ -429,6 +429,23 @@ export class SpaceService {
       });
     }
 
+    const nameSet = new Set<string>();
+    for (const validRow of validRows) {
+      if (nameSet.has(validRow.name)) {
+        throw new BadRequestException({
+          message: '数据验证失败',
+          errors: [
+            {
+              row: validRow.rowIndex,
+              field: 'name',
+              message: `重复的空间名称: ${validRow.name}`,
+            },
+          ],
+        });
+      }
+      nameSet.add(validRow.name);
+    }
+
     const spaceMap = new Map<string, string>();
 
     try {
