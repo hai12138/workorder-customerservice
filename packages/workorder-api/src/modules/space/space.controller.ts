@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Header, Param, Post, Put, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, Res, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { RequirePermissions } from '../../common/guards/roles.guard';
@@ -20,11 +20,11 @@ export class SpaceController {
   }
 
   @Get('template')
-  @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-  @Header('Content-Disposition', 'attachment; filename=space_template.xlsx')
-  async downloadTemplate() {
+  async downloadTemplate(@Res({ passthrough: false }) res: any) {
     const buffer = await this.spaceService.generateTemplate();
-    return buffer;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=space_template.xlsx');
+    res.send(buffer);
   }
 
   @Post('import')
