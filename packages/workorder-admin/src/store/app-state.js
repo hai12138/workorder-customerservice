@@ -8,6 +8,7 @@ let snapshot = null
 let loading = null
 let filteredProjects = null
 let projectsFilterState = { keyword: '', status: '', province: '', city: '', district: '', businessType: '' }
+let spacesCache = null
 
 export function getSnapshot() {
   return snapshot
@@ -68,5 +69,14 @@ export async function loadBootstrap(forceProjectId) {
 }
 
 export async function refresh() {
+  spacesCache = null
   return loadBootstrap(getProjectId() || undefined)
+}
+
+export function getSpacesCache() {
+  return spacesCache
+}
+
+export function setSpacesCache(data) {
+  spacesCache = data
 }

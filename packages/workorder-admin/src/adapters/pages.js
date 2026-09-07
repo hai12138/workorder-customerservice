@@ -1,7 +1,7 @@
 /**
  * Live page renderers — DOM class names stay identical to the approved prototype.
  */
-import { records, dashboard as dashboardState, activities, projectId, getProjectsFilterState } from '../store/app-state.js'
+import { records, dashboard as dashboardState, activities, projectId, getProjectsFilterState, getSpacesCache } from '../store/app-state.js'
 import { badge, btn, head, filters, table, footer, esc, toneBadge } from './ui.js'
 
 function metricCards(items) {
@@ -129,39 +129,59 @@ export function projects() {
 }
 
 export function spaces() {
-  const list = records('spaces')
-  const roots = list.filter((s) => {
-    const parent = String(s.values?.parent ?? '')
-    return !list.some((x) => x.title === parent)
-  })
-  const childrenOf = (title) => list.filter((s) => String(s.values?.parent) === title)
-  const icon = (type) => {
-    const t = String(type || '')
-    if (t.includes('车库')) return '▦'
-    if (t.includes('绿化') || t.includes('花园')) return '♧'
-    if (t.includes('楼层')) return ''
-    return '▤'
+  const cache = getSpacesCache()
+  
+  if (!cache || !cache.tree) {
+    return (
+      head('空间管理', 'WEB-02', '维护楼栋、楼层、房间、公区与车位', btn('下载模板') + btn('导入空间') + `<button class="btn primary" data-action="new-space">新增空间</button>`) +
+      `<div class="split"><div class="tree"><h3>空间树</h3><p class="muted">正在加载...</p></div><div>${filters('搜索空间名称')}${table(['空间名称', '空间类型', '完整路径', '状态', '更新时间', '操作'], [])}${footer('共 0 个空间')}</div></div>`
+    )
   }
-  let tree = `<div class="tree-row on">⌂ 当前项目</div>`
-  for (const r of roots) {
-    const ic = icon(r.values?.type)
-    tree += `<div class="tree-row l2">${ic ? ic + ' ' : ''}${esc(r.title)}</div>`
-    for (const c of childrenOf(r.title)) {
-      tree += `<div class="tree-row l3">${esc(c.title)}</div>`
+  
+  const { tree, list } = cache
+  const projectName = tree.name || '当前项目'
+  
+  const buildTreeHtml = (node, level = 1) => {
+    let html = ''
+    const icon = level === 1 ? '⌂' : level === 2 ? '▤' : ''
+    const levelClass = level === 1 ? 'on' : level === 2 ? 'l2' : 'l3'
+    html += `<div class="tree-row ${levelClass}">${icon ? icon + ' ' : ''}${esc(node.name)}</div>`
+    
+    if (node.children && node.children.length > 0) {
+      for (const child of node.children) {
+        html += buildTreeHtml(child, level + 1)
+      }
     }
+    return html
   }
-  const rows = list.map((s) => [
-    `<strong>${esc(s.title)}</strong>`,
-    esc(s.values?.type || '—'),
-    esc(s.subtitle || '—'),
-    esc(s.values?.code || s.id),
-    toneBadge(s.status, s.tone),
-    esc(s.values?.updated || '—'),
-    `<div class="row-actions"><button class="text-btn" data-action="space-detail" data-id="${esc(s.id)}">查看</button></div>`,
-  ])
+  
+  const treeHtml = buildTreeHtml(tree)
+  
+  const buildPath = (space) => {
+    if (!space.parentId) return space.name
+    const parent = list.find(s => s.id === space.parentId)
+    if (!parent) return space.name
+    return buildPath(parent) + ' / ' + space.name
+  }
+  
+  const rows = list.map((s) => {
+    const fullPath = buildPath(s)
+    const updatedAt = s.updatedAt ? new Date(s.updatedAt).toLocaleString('zh-CN') : s.createdAt ? new Date(s.createdAt).toLocaleString('zh-CN') : '—'
+    const statusTone = s.status === '可用' ? 'ok' : 'neutral'
+    
+    return [
+      `<strong>${esc(s.name)}</strong>`,
+      esc(s.type),
+      esc(fullPath),
+      toneBadge(s.status, statusTone),
+      esc(updatedAt),
+      `<div class="row-actions"><button class="text-btn" data-action="space-detail" data-id="${esc(s.id)}">查看</button><button class="text-btn" data-action="space-edit" data-id="${esc(s.id)}">编辑</button><button class="text-btn" data-action="space-delete" data-id="${esc(s.id)}">删除</button></div>`,
+    ]
+  })
+  
   return (
     head('空间管理', 'WEB-02', '维护楼栋、楼层、房间、公区与车位', btn('下载模板') + btn('导入空间') + `<button class="btn primary" data-action="new-space">新增空间</button>`) +
-    `<div class="split"><div class="tree"><h3>空间树 <span class="muted">${list.length} 个节点</span></h3>${tree}</div><div>${filters('搜索空间名称')}${table(['空间名称', '空间类型', '完整路径', '外部编号', '状态', '更新时间', '操作'], rows)}${footer(`共 ${list.length} 个空间`)}</div></div>`
+    `<div class="split"><div class="tree"><h3>空间树 <span class="muted">${list.length} 个节点</span></h3>${treeHtml}</div><div>${filters('搜索空间名称')}${table(['空间名称', '空间类型', '完整路径', '状态', '更新时间', '操作'], rows)}${footer(`共 ${list.length} 个空间`)}</div></div>`
   )
 }
 

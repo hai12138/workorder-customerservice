@@ -110,3 +110,33 @@ export async function queryProjects(query, status, province, city, district, bus
   if (businessType && businessType !== '全部业态') params.set('businessType', businessType)
   return api(`/projects?${params.toString()}`)
 }
+
+export async function getSpaces(projectId, tree = false) {
+  const pid = projectId || getProjectId()
+  if (!pid) throw new Error('项目ID不能为空')
+  const params = new URLSearchParams()
+  params.set('projectId', pid)
+  if (tree) params.set('tree', 'true')
+  return api(`/spaces?${params.toString()}`)
+}
+
+export async function createSpace(data) {
+  const projectId = data.projectId || getProjectId()
+  return api('/spaces', {
+    method: 'POST',
+    body: JSON.stringify({ ...data, projectId }),
+  })
+}
+
+export async function updateSpace(id, data) {
+  return api(`/spaces/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function deleteSpace(id) {
+  return api(`/spaces/${id}`, {
+    method: 'DELETE',
+  })
+}

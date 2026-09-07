@@ -2,7 +2,7 @@ import shell from './prototype-shell.html?raw'
 import * as P from './adapters/pages.js'
 import { badge } from './adapters/ui.js'
 import { clearSession, getSession, setProjectId } from './store/session.js'
-import { loadBootstrap, refresh, records, getSnapshot, setFilteredProjects, clearFilteredProjects, setProjectsFilterState, clearProjectsFilterState } from './store/app-state.js'
+import { loadBootstrap, refresh, records, getSnapshot, setFilteredProjects, clearFilteredProjects, setProjectsFilterState, clearProjectsFilterState, setSpacesCache, getSpacesCache } from './store/app-state.js'
 import {
   createRecord,
   publishConfig,
@@ -14,6 +14,10 @@ import {
   runCommand,
   queryProjects,
   updateProject,
+  getSpaces,
+  createSpace,
+  updateSpace,
+  deleteSpace,
 } from './api/workbench.js'
 import { notifyApi } from './api/notify.js'
 import { agentApi } from './api/agent.js'
@@ -47,6 +51,9 @@ projectSelect?.addEventListener('change', async () => {
   toast('正在切换项目…')
   try {
     await refresh()
+    if (current === 'spaces') {
+      await loadSpacesData()
+    }
     await fillProjects()
     render()
     toast('项目已切换')
@@ -205,6 +212,19 @@ const renderers = {
 let current = (location.hash || '#dashboard').slice(1)
 if (!pages[current]) current = 'dashboard'
 
+async function loadSpacesData() {
+  try {
+    const result = await getSpaces(getSnapshot()?.projectId, true)
+    const tree = result
+    const listResult = await getSpaces(getSnapshot()?.projectId, false)
+    const list = Array.isArray(listResult) ? listResult : []
+    setSpacesCache({ tree, list })
+  } catch (e) {
+    console.error('Failed to load spaces:', e)
+    setSpacesCache({ tree: { name: '当前项目', children: [] }, list: [] })
+  }
+}
+
 function render() {
   document.getElementById('page').innerHTML = renderers[current]()
   document.getElementById('tabTitle').innerHTML = `${pages[current][0]} <span>×</span>`
@@ -223,6 +243,15 @@ function render() {
   // Initialize project filters if on projects page
   if (current === 'projects') {
     setTimeout(() => initProjectFilters(), 0)
+  }
+  
+  // Load spaces data if on spaces page
+  if (current === 'spaces') {
+    setTimeout(() => {
+      void loadSpacesData().then(() => {
+        document.getElementById('page').innerHTML = renderers[current]()
+      })
+    }, 0)
   }
   
   window.scrollTo(0, 0)
@@ -277,6 +306,12 @@ async function afterWrite(msg) {
     } else {
       await refresh()
     }
+    
+    // Reload spaces if on spaces page
+    if (current === 'spaces') {
+      await loadSpacesData()
+    }
+    
     await fillProjects()
     render()
     toast(msg)
@@ -887,25 +922,167 @@ async function handleAction(act, a) {
       return
     }
     if (act === 'new-space') {
+      const cache = getSpacesCache()
+      const spaces = cache?.list || []
+      const spaceOptions = spaces.length > 0 
+        ? `<option value="">无（作为根层空间）</option>` + spaces.map(s => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')
+        : `<option value="">无（作为根层空间）</option>`
+      
       modal(
         '新增空间',
-        `<div class="form-grid"><div class="form-row"><label>* 空间名称</label><input id="f-title" placeholder="例如：A区地下车库"></div><div class="form-row"><label>* 空间类型</label><select id="f-type"><option>楼栋</option><option>楼层</option><option>公区 / 车库</option><option>公区 / 绿化</option></select></div></div>`,
+        `<div class="form-grid">
+          <div class="form-row">
+            <label>* 空间名称</label>
+            <input id="f-name" placeholder="例如：A栋" required>
+          </div>
+          <div class="form-row">
+            <label>* 空间类型</label>
+            <select id="f-type" required>
+              <option value="楼栋">楼栋</option>
+              <option value="楼层">楼层</option>
+              <option value="房间">房间</option>
+              <option value="公区">公区</option>
+              <option value="车位">车位</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>* 状态</label>
+            <select id="f-status">
+              <option value="可用">可用</option>
+              <option value="停用">停用</option>
+            </select>
+          </div>
+          <div class="form-row full">
+            <label>上级空间</label>
+            <select id="f-parent">${spaceOptions}</select>
+          </div>
+        </div>`,
         `<button class="btn" data-action="close">取消</button><button class="btn primary" data-action="save-space">保存</button>`,
       )
       return
     }
     if (act === 'save-space') {
-      const title = document.getElementById('f-title')?.value?.trim()
-      const type = document.getElementById('f-type')?.value || '楼栋'
-      if (!title) return toast('请填写空间名称')
-      await createRecord('spaces', { title, values: { type } })
-      await afterWrite('空间已创建')
+      const name = document.getElementById('f-name')?.value?.trim()
+      const type = document.getElementById('f-type')?.value
+      const status = document.getElementById('f-status')?.value
+      const parentId = document.getElementById('f-parent')?.value || undefined
+      
+      if (!name) return toast('请填写空间名称')
+      if (!type) return toast('请选择空间类型')
+      
+      const data = { name, type, status: status || '可用' }
+      if (parentId) data.parentId = parentId
+      
+      const spaceId = a.dataset.id
+      if (spaceId) {
+        await updateSpace(spaceId, data)
+        await afterWrite('空间已更新')
+      } else {
+        await createSpace(data)
+        await afterWrite('空间已创建')
+      }
+      return
+    }
+    if (act === 'space-edit') {
+      const cache = getSpacesCache()
+      const spaces = cache?.list || []
+      const space = spaces.find((x) => x.id === a.dataset.id)
+      if (!space) return toast('未找到空间')
+      
+      const spaceOptions = spaces
+        .filter(s => s.id !== space.id)
+        .map(s => `<option value="${esc(s.id)}" ${s.id === space.parentId ? 'selected' : ''}>${esc(s.name)}</option>`)
+        .join('')
+      
+      modal(
+        '编辑空间',
+        `<div class="form-grid">
+          <div class="form-row">
+            <label>* 空间名称</label>
+            <input id="f-name" value="${esc(space.name)}" required>
+          </div>
+          <div class="form-row">
+            <label>* 空间类型</label>
+            <select id="f-type" required>
+              <option value="楼栋" ${space.type === '楼栋' ? 'selected' : ''}>楼栋</option>
+              <option value="楼层" ${space.type === '楼层' ? 'selected' : ''}>楼层</option>
+              <option value="房间" ${space.type === '房间' ? 'selected' : ''}>房间</option>
+              <option value="公区" ${space.type === '公区' ? 'selected' : ''}>公区</option>
+              <option value="车位" ${space.type === '车位' ? 'selected' : ''}>车位</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>* 状态</label>
+            <select id="f-status">
+              <option value="可用" ${space.status === '可用' ? 'selected' : ''}>可用</option>
+              <option value="停用" ${space.status === '停用' ? 'selected' : ''}>停用</option>
+            </select>
+          </div>
+          <div class="form-row full">
+            <label>上级空间</label>
+            <select id="f-parent">
+              <option value="">无（作为根层空间）</option>
+              ${spaceOptions}
+            </select>
+          </div>
+        </div>`,
+        `<button class="btn" data-action="close">取消</button><button class="btn primary" data-action="save-space" data-id="${esc(space.id)}">保存</button>`,
+      )
+      return
+    }
+    if (act === 'space-delete') {
+      const cache = getSpacesCache()
+      const spaces = cache?.list || []
+      const space = spaces.find((x) => x.id === a.dataset.id)
+      if (!space) return toast('未找到空间')
+      
+      modal(
+        '删除空间',
+        `<div class="health"><b>确认删除 ${esc(space.name)} ？</b><p class="sub">删除后不可恢复。如果该空间下存在子空间，将无法删除。</p></div>`,
+        `<button class="btn" data-action="close">取消</button><button class="btn danger" data-action="confirm-delete-space" data-id="${esc(space.id)}">确认删除</button>`,
+      )
+      return
+    }
+    if (act === 'confirm-delete-space') {
+      try {
+        await deleteSpace(a.dataset.id)
+        await afterWrite('空间已删除')
+      } catch (err) {
+        const message = err?.message || '删除失败'
+        toast(message)
+      }
       return
     }
     if (act === 'space-detail') {
-      const rec = records('spaces').find((x) => x.id === a.dataset.id) || records('spaces')[0]
-      if (!rec) return toast('未找到空间')
-      drawer(`${rec.title} · 空间详情`, `${badge(rec.status, 'ok')}<div class="kv" style="margin-top:15px"><div><span>类型</span><b>${rec.values?.type || '—'}</b></div><div><span>路径</span><b>${rec.subtitle || '—'}</b></div><div><span>上级</span><b>${rec.values?.parent || '—'}</b></div></div>`)
+      const cache = getSpacesCache()
+      const spaces = cache?.list || []
+      const space = spaces.find((x) => x.id === a.dataset.id)
+      if (!space) return toast('未找到空间')
+      
+      const buildPath = (s) => {
+        if (!s.parentId) return s.name
+        const parent = spaces.find(p => p.id === s.parentId)
+        if (!parent) return s.name
+        return buildPath(parent) + ' / ' + s.name
+      }
+      
+      const fullPath = buildPath(space)
+      const parentName = space.parentId ? (spaces.find(p => p.id === space.parentId)?.name || '—') : '无'
+      const updatedAt = space.updatedAt ? new Date(space.updatedAt).toLocaleString('zh-CN') : space.createdAt ? new Date(space.createdAt).toLocaleString('zh-CN') : '—'
+      const statusBadge = space.status === '可用' ? badge('可用', 'ok') : badge('停用', 'neutral')
+      
+      drawer(
+        `${space.name} · 空间详情`,
+        `<div class="actions">${statusBadge}<span class="muted">${esc(space.id)}</span></div>
+        <div class="kv" style="margin-top:15px">
+          <div><span>名称</span><b>${esc(space.name)}</b></div>
+          <div><span>类型</span><b>${esc(space.type)}</b></div>
+          <div style="grid-column:1/-1"><span>完整路径</span><b>${esc(fullPath)}</b></div>
+          <div><span>上级空间</span><b>${esc(parentName)}</b></div>
+          <div><span>状态</span><b>${esc(space.status)}</b></div>
+          <div style="grid-column:1/-1"><span>更新时间</span><b>${updatedAt}</b></div>
+        </div>`,
+      )
       return
     }
     if (['new-person', 'person-edit', 'person-detail', 'new-role', 'new-type', 'type-detail', 'new-field', 'new-rule', 'new-plan', 'new-agent-app'].includes(act)) {
