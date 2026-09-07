@@ -8,6 +8,7 @@ let snapshot = null
 let loading = null
 let filteredProjects = null
 let projectsFilterState = { keyword: '', status: '', province: '', city: '', district: '', businessType: '' }
+let spacesFilterKeyword = ''
 let spacesCache = null
 let selectedSpaceId = null
 
@@ -40,6 +41,18 @@ export function setProjectsFilterState(keyword, status, province, city, district
 
 export function clearProjectsFilterState() {
   projectsFilterState = { keyword: '', status: '', province: '', city: '', district: '', businessType: '' }
+}
+
+export function getSpacesFilterKeyword() {
+  return spacesFilterKeyword
+}
+
+export function setSpacesFilterKeyword(keyword) {
+  spacesFilterKeyword = keyword
+}
+
+export function clearSpacesFilterKeyword() {
+  spacesFilterKeyword = ''
 }
 
 export function projectId() {

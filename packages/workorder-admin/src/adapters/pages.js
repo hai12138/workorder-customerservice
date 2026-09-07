@@ -1,7 +1,7 @@
 /**
  * Live page renderers — DOM class names stay identical to the approved prototype.
  */
-import { records, dashboard as dashboardState, activities, projectId, getProjectsFilterState, getSpacesCache, getSelectedSpaceId } from '../store/app-state.js'
+import { records, dashboard as dashboardState, activities, projectId, getProjectsFilterState, getSpacesCache, getSelectedSpaceId, getSpacesFilterKeyword } from '../store/app-state.js'
 import { badge, btn, head, filters, table, footer, esc, toneBadge } from './ui.js'
 
 function metricCards(items) {
@@ -141,6 +141,7 @@ export function spaces() {
   const { tree, list } = cache
   const projectName = tree.name || '当前项目'
   const selectedSpaceId = getSelectedSpaceId()
+  const keyword = getSpacesFilterKeyword()
   
   // Helper function to collect all descendant IDs
   const collectDescendantIds = (node) => {
@@ -195,7 +196,7 @@ export function spaces() {
   
   const treeHtml = buildTreeHtml(tree)
   
-  // Filter list based on selected node
+  // Filter list based on selected node (tree filtering first)
   let filteredList = list
   if (selectedSpaceId) {
     const selectedNode = findNodeById(tree, selectedSpaceId)
@@ -203,6 +204,23 @@ export function spaces() {
       const allowedIds = collectDescendantIds(selectedNode)
       filteredList = list.filter(s => allowedIds.includes(s.id))
     }
+  }
+  
+  // Apply keyword filter (on name or path) - after tree filtering
+  if (keyword) {
+    const keywordLower = keyword.toLowerCase()
+    filteredList = filteredList.filter(s => {
+      const name = (s.name || '').toLowerCase()
+      // Build path for search
+      const buildPath = (space) => {
+        if (!space.parentId) return space.name
+        const parent = list.find(p => p.id === space.parentId)
+        if (!parent) return space.name
+        return buildPath(parent) + ' / ' + space.name
+      }
+      const path = buildPath(s).toLowerCase()
+      return name.includes(keywordLower) || path.includes(keywordLower)
+    })
   }
   
   const buildPath = (space) => {
@@ -227,9 +245,16 @@ export function spaces() {
     ]
   })
   
+  // Build simple keyword filter for spaces
+  const spaceFilters = `<div class="filters">
+    <input id="keyword" placeholder="搜索空间名称" value="${esc(keyword)}">
+    <button class="btn primary" data-action="query">查询</button>
+    <button class="btn" data-action="reset-filter">重置</button>
+  </div>`
+  
   return (
     head('空间管理', 'WEB-02', '维护楼栋、楼层、房间、公区与车位', btn('下载模板', 'download-space-template') + btn('导入空间', 'import-spaces') + `<button class="btn primary" data-action="new-space">新增空间</button>`) +
-    `<div class="split"><div class="tree"><h3>空间树 <span class="muted">${list.length} 个节点</span></h3>${treeHtml}</div><div>${filters('搜索空间名称')}${table(['空间名称', '空间类型', '完整路径', '状态', '更新时间', '操作'], rows)}${footer(`共 ${filteredList.length} 个空间`)}</div></div>`
+    `<div class="split"><div class="tree"><h3>空间树 <span class="muted">${list.length} 个节点</span></h3>${treeHtml}</div><div>${spaceFilters}${table(['空间名称', '空间类型', '完整路径', '状态', '更新时间', '操作'], rows)}${footer(`共 ${filteredList.length} 个空间`)}</div></div>`
   )
 }
 

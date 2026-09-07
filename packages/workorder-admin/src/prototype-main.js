@@ -2,7 +2,7 @@ import shell from './prototype-shell.html?raw'
 import * as P from './adapters/pages.js'
 import { badge } from './adapters/ui.js'
 import { clearSession, getSession, setProjectId } from './store/session.js'
-import { loadBootstrap, refresh, records, getSnapshot, setFilteredProjects, clearFilteredProjects, setProjectsFilterState, clearProjectsFilterState, setSpacesCache, getSpacesCache, setSelectedSpaceId, clearSelectedSpaceId } from './store/app-state.js'
+import { loadBootstrap, refresh, records, getSnapshot, setFilteredProjects, clearFilteredProjects, setProjectsFilterState, clearProjectsFilterState, setSpacesCache, getSpacesCache, setSelectedSpaceId, clearSelectedSpaceId, setSpacesFilterKeyword, clearSpacesFilterKeyword } from './store/app-state.js'
 import {
   createRecord,
   publishConfig,
@@ -931,6 +931,11 @@ async function handleAction(act, a) {
         } catch (e) {
           toast(e.message || '查询失败')
         }
+      } else if (current === 'spaces') {
+        const keyword = document.getElementById('keyword')?.value?.trim() || ''
+        setSpacesFilterKeyword(keyword)
+        render()
+        toast('筛选条件已应用')
       } else {
         toast('筛选条件已应用')
       }
@@ -942,31 +947,34 @@ async function handleAction(act, a) {
       const selects = document.querySelectorAll('.filters select')
       selects.forEach((s) => (s.selectedIndex = 0))
       
-      // Reset cascader
-      const pcaProvince = document.getElementById('filter-pca-province')
-      const pcaCity = document.getElementById('filter-pca-city')
-      const pcaDistrict = document.getElementById('filter-pca-district')
-      const pcaDisplay = document.getElementById('filter-pca-display')
-      const pcaInput = document.getElementById('filter-pca-input')
-      if (pcaProvince) pcaProvince.value = ''
-      if (pcaCity) pcaCity.value = ''
-      if (pcaDistrict) pcaDistrict.value = ''
-      if (pcaDisplay) pcaDisplay.textContent = '选择省份 / 城市 / 区县'
-      if (pcaInput) pcaInput.classList.add('placeholder')
-      
-      // Reset filter state
-      currentFilterState = {
-        keyword: '',
-        status: '全部状态',
-        province: '',
-        city: '',
-        district: '',
-        businessType: '全部业态'
-      }
-      
+      // Reset cascader (only for projects page)
       if (current === 'projects') {
+        const pcaProvince = document.getElementById('filter-pca-province')
+        const pcaCity = document.getElementById('filter-pca-city')
+        const pcaDistrict = document.getElementById('filter-pca-district')
+        const pcaDisplay = document.getElementById('filter-pca-display')
+        const pcaInput = document.getElementById('filter-pca-input')
+        if (pcaProvince) pcaProvince.value = ''
+        if (pcaCity) pcaCity.value = ''
+        if (pcaDistrict) pcaDistrict.value = ''
+        if (pcaDisplay) pcaDisplay.textContent = '选择省份 / 城市 / 区县'
+        if (pcaInput) pcaInput.classList.add('placeholder')
+        
+        // Reset filter state
+        currentFilterState = {
+          keyword: '',
+          status: '全部状态',
+          province: '',
+          city: '',
+          district: '',
+          businessType: '全部业态'
+        }
+        
         clearFilteredProjects()
         clearProjectsFilterState()
+        render()
+      } else if (current === 'spaces') {
+        clearSpacesFilterKeyword()
         render()
       }
       toast('筛选条件已重置')
