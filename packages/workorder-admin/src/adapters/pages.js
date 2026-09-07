@@ -133,7 +133,7 @@ export function spaces() {
   
   if (!cache || !cache.tree) {
     return (
-      head('空间管理', 'WEB-02', '维护楼栋、楼层、房间、公区与车位', btn('下载模板') + btn('导入空间') + `<button class="btn primary" data-action="new-space">新增空间</button>`) +
+      head('空间管理', 'WEB-02', '维护楼栋、楼层、房间、公区与车位', btn('下载模板', 'download-space-template') + btn('导入空间', 'import-spaces') + `<button class="btn primary" data-action="new-space">新增空间</button>`) +
       `<div class="split"><div class="tree"><h3>空间树</h3><p class="muted">正在加载...</p></div><div>${filters('搜索空间名称')}${table(['空间名称', '空间类型', '完整路径', '状态', '更新时间', '操作'], [])}${footer('共 0 个空间')}</div></div>`
     )
   }
@@ -180,7 +180,7 @@ export function spaces() {
   })
   
   return (
-    head('空间管理', 'WEB-02', '维护楼栋、楼层、房间、公区与车位', btn('下载模板') + btn('导入空间') + `<button class="btn primary" data-action="new-space">新增空间</button>`) +
+    head('空间管理', 'WEB-02', '维护楼栋、楼层、房间、公区与车位', btn('下载模板', 'download-space-template') + btn('导入空间', 'import-spaces') + `<button class="btn primary" data-action="new-space">新增空间</button>`) +
     `<div class="split"><div class="tree"><h3>空间树 <span class="muted">${list.length} 个节点</span></h3>${treeHtml}</div><div>${filters('搜索空间名称')}${table(['空间名称', '空间类型', '完整路径', '状态', '更新时间', '操作'], rows)}${footer(`共 ${list.length} 个空间`)}</div></div>`
   )
 }

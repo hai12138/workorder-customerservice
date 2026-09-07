@@ -140,3 +140,54 @@ export async function deleteSpace(id) {
     method: 'DELETE',
   })
 }
+
+export async function downloadSpaceTemplate() {
+  const token = (await import('../store/session.js')).getToken()
+  const headers = {}
+  if (token) headers.Authorization = `Bearer ${token}`
+  
+  const res = await fetch('/api/v1/spaces/template', { headers })
+  if (!res.ok) {
+    throw new Error(`下载模板失败: ${res.status}`)
+  }
+  
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = 'space_template.xlsx'
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+export async function importSpaces(file, projectId) {
+  const token = (await import('../store/session.js')).getToken()
+  const pid = projectId || (await import('../store/session.js')).getProjectId()
+  
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('projectId', pid)
+  
+  const headers = {}
+  if (token) headers.Authorization = `Bearer ${token}`
+  
+  const res = await fetch('/api/v1/spaces/import', {
+    method: 'POST',
+    headers,
+    body: formData,
+  })
+  
+  const body = await res.json().catch(() => ({}))
+  
+  if (!res.ok || (body.code !== undefined && body.code !== 0)) {
+    const errorMsg = body.message || `导入失败 ${res.status}`
+    const errors = body.data?.errors || body.errors
+    if (errors && Array.isArray(errors)) {
+      const errorLines = errors.map(e => `第 ${e.row} 行${e.field ? `(${e.field})` : ''}: ${e.message}`).join('\n')
+      throw new Error(`${errorMsg}\n\n${errorLines}`)
+    }
+    throw new Error(errorMsg)
+  }
+  
+  return body.data !== undefined ? body.data : body
+}

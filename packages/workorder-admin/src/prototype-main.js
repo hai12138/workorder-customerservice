@@ -18,6 +18,8 @@ import {
   createSpace,
   updateSpace,
   deleteSpace,
+  downloadSpaceTemplate,
+  importSpaces,
 } from './api/workbench.js'
 import { notifyApi } from './api/notify.js'
 import { agentApi } from './api/agent.js'
@@ -1050,6 +1052,59 @@ async function handleAction(act, a) {
       } catch (err) {
         const message = err?.message || '删除失败'
         toast(message)
+      }
+      return
+    }
+    if (act === 'download-space-template') {
+      try {
+        await downloadSpaceTemplate()
+        toast('模板已下载')
+      } catch (err) {
+        toast(err?.message || '下载失败')
+      }
+      return
+    }
+    if (act === 'import-spaces') {
+      const input = document.createElement('input')
+      input.type = 'file'
+      input.accept = '.xlsx,.xls,.csv'
+      input.onchange = async (e) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+        
+        modal(
+          '导入空间',
+          `<div class="health"><b>确认导入空间数据？</b><p class="sub">文件：${esc(file.name)}<br>导入失败时不会写入数据库</p></div>`,
+          `<button class="btn" data-action="close">取消</button><button class="btn primary" data-action="confirm-import-spaces">确认导入</button>`,
+        )
+        
+        // Store file in a temporary place for the confirm action
+        window._importSpaceFile = file
+      }
+      input.click()
+      return
+    }
+    if (act === 'confirm-import-spaces') {
+      const file = window._importSpaceFile
+      delete window._importSpaceFile
+      
+      if (!file) {
+        toast('未选择文件')
+        return
+      }
+      
+      try {
+        document.getElementById('portal').innerHTML = '<div class="overlay"><div class="modal"><div class="modal-body"><p>正在导入，请稍候...</p></div></div></div>'
+        const result = await importSpaces(file)
+        await afterWrite(`成功导入 ${result.imported || 0} 个空间`)
+      } catch (err) {
+        document.getElementById('portal').innerHTML = ''
+        const message = err?.message || '导入失败'
+        modal(
+          '导入失败',
+          `<div class="health"><b>数据验证失败</b><p class="sub" style="white-space: pre-wrap; max-height: 300px; overflow-y: auto;">${esc(message)}</p></div>`,
+          `<button class="btn primary" data-action="close">关闭</button>`,
+        )
       }
       return
     }
