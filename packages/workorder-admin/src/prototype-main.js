@@ -1067,7 +1067,7 @@ async function handleAction(act, a) {
     if (act === 'import-spaces') {
       const input = document.createElement('input')
       input.type = 'file'
-      input.accept = '.xlsx,.xls,.csv'
+      input.accept = '.xlsx'
       input.onchange = async (e) => {
         const file = e.target.files?.[0]
         if (!file) return
