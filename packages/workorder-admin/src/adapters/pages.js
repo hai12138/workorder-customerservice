@@ -1,7 +1,7 @@
 /**
  * Live page renderers — DOM class names stay identical to the approved prototype.
  */
-import { records, dashboard as dashboardState, activities, projectId, getProjectsFilterState, getSpacesCache, getSelectedSpaceId, getSpacesFilterKeyword } from '../store/app-state.js'
+import { records, dashboard as dashboardState, activities, projectId, getProjectsFilterState, getSpacesCache, getSelectedSpaceId, getSpacesFilterState } from '../store/app-state.js'
 import { badge, btn, head, filters, table, footer, esc, toneBadge } from './ui.js'
 
 function metricCards(items) {
@@ -141,7 +141,7 @@ export function spaces() {
   const { tree, list } = cache
   const projectName = tree.name || '当前项目'
   const selectedSpaceId = getSelectedSpaceId()
-  const keyword = getSpacesFilterKeyword()
+  const filterState = getSpacesFilterState()
   
   // Helper function to collect all descendant IDs
   const collectDescendantIds = (node) => {
@@ -206,12 +206,17 @@ export function spaces() {
     }
   }
   
-  // Apply keyword filter (on name or path) - after tree filtering
-  if (keyword) {
-    const keywordLower = keyword.toLowerCase()
+  // Overlay: tree constraint → type → status → keyword
+  if (filterState.type && filterState.type !== '全部') {
+    filteredList = filteredList.filter(s => s.type === filterState.type)
+  }
+  if (filterState.status && filterState.status !== '全部') {
+    filteredList = filteredList.filter(s => s.status === filterState.status)
+  }
+  if (filterState.keyword) {
+    const keywordLower = filterState.keyword.toLowerCase()
     filteredList = filteredList.filter(s => {
       const name = (s.name || '').toLowerCase()
-      // Build path for search
       const buildPath = (space) => {
         if (!space.parentId) return space.name
         const parent = list.find(p => p.id === space.parentId)
@@ -245,9 +250,14 @@ export function spaces() {
     ]
   })
   
-  // Build simple keyword filter for spaces
+  const typeOptions = ['全部', '楼栋', '楼层', '房间', '公区', '车位']
+  const statusOptions = ['全部', '可用', '停用']
+  const typeSelect = typeOptions.map((opt) => `<option${filterState.type === opt ? ' selected' : ''}>${opt}</option>`).join('')
+  const statusSelect = statusOptions.map((opt) => `<option${filterState.status === opt ? ' selected' : ''}>${opt}</option>`).join('')
   const spaceFilters = `<div class="filters">
-    <input id="keyword" placeholder="搜索空间名称" value="${esc(keyword)}">
+    <select id="type-select">${typeSelect}</select>
+    <select id="status-select">${statusSelect}</select>
+    <input id="keyword" placeholder="搜索空间名称" value="${esc(filterState.keyword)}">
     <button class="btn primary" data-action="query">查询</button>
     <button class="btn" data-action="reset-filter">重置</button>
   </div>`

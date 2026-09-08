@@ -8,7 +8,7 @@ let snapshot = null
 let loading = null
 let filteredProjects = null
 let projectsFilterState = { keyword: '', status: '', province: '', city: '', district: '', businessType: '' }
-let spacesFilterKeyword = ''
+let spacesFilterState = { keyword: '', type: '全部', status: '全部' }
 let spacesCache = null
 let selectedSpaceId = null
 
@@ -43,16 +43,16 @@ export function clearProjectsFilterState() {
   projectsFilterState = { keyword: '', status: '', province: '', city: '', district: '', businessType: '' }
 }
 
-export function getSpacesFilterKeyword() {
-  return spacesFilterKeyword
+export function getSpacesFilterState() {
+  return spacesFilterState
 }
 
-export function setSpacesFilterKeyword(keyword) {
-  spacesFilterKeyword = keyword
+export function setSpacesFilterState(keyword, type, status) {
+  spacesFilterState = { keyword, type, status }
 }
 
-export function clearSpacesFilterKeyword() {
-  spacesFilterKeyword = ''
+export function clearSpacesFilterState() {
+  spacesFilterState = { keyword: '', type: '全部', status: '全部' }
 }
 
 export function projectId() {
