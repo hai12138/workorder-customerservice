@@ -175,7 +175,7 @@ export function spaces() {
     // Only render up to level 3
     if (level <= 3) {
       const icon = level === 1 ? '⌂' : level === 2 ? '▤' : ''
-      const levelClass = level === 1 ? 'on' : level === 2 ? 'l2' : 'l3'
+      const levelClass = level === 1 ? 'l1' : level === 2 ? 'l2' : 'l3'
       const isSelected = node.id === selectedSpaceId || (level === 1 && !selectedSpaceId)
       const selectedClass = isSelected ? 'selected' : ''
       const nodeId = node.id || 'root'
