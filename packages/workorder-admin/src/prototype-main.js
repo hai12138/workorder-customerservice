@@ -1,6 +1,6 @@
 import shell from './prototype-shell.html?raw'
 import * as P from './adapters/pages.js'
-import { badge, esc } from './adapters/ui.js'
+import { badge } from './adapters/ui.js'
 import { clearSession, getSession, setProjectId } from './store/session.js'
 import { loadBootstrap, refresh, records, getSnapshot, setFilteredProjects, clearFilteredProjects, setProjectsFilterState, clearProjectsFilterState, setSpacesCache, getSpacesCache, setSelectedSpaceId, clearSelectedSpaceId, setSpacesFilterState, clearSpacesFilterState, getPeopleTab, setPeopleTab, getPeopleFilterState, setPeopleFilterState, clearPeopleFilterState, getPeopleStaffCache, setPeopleStaffCache, clearPeopleStaffCache } from './store/app-state.js'
 import {
