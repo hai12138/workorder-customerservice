@@ -2,7 +2,6 @@
  * Live page renderers — DOM class names stay identical to the approved prototype.
  */
 import { records, dashboard as dashboardState, activities, projectId, getProjectsFilterState, getSpacesCache, getSelectedSpaceId, getSpacesFilterState, getPeopleTab, getPeopleFilterState, getPeopleListCache } from '../store/app-state.js'
-import { isStaffIdentity } from '../api/people.js'
 import { badge, btn, head, filters, table, footer, esc, toneBadge } from './ui.js'
 
 function metricCards(items) {
@@ -289,10 +288,10 @@ export function peopleView() {
   const tab = getPeopleTab()
   const filterState = getPeopleFilterState()
   const cache = getPeopleListCache()
-  // 本刀全部/员工同源：只吃 GET /api/v1/people（失败时缓存已是 bootstrap 兜底）。
+  // 口径1：两 Tab 同吃员工侧 GET /api/v1/people（失败时缓存已是员工口径兜底）。
   const source = cache?.items || []
   const list = applyPeopleFilters(
-    tab === 'staff' ? source.filter((p) => isStaffIdentity(p.values?.identity)) : source,
+    source,
     cache?.source === 'api' ? { keyword: '', status: '全部' } : filterState,
   )
 

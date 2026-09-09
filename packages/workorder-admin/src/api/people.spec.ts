@@ -3,6 +3,7 @@ import {
   isStaffIdentity,
   toPersonRecord,
   unwrapPeopleList,
+  personApiMessage,
   STAFF_IDENTITIES,
   EXCLUDED_IDENTITIES,
   PERSON_STATUSES,
@@ -39,5 +40,12 @@ describe('people /api/v1/people helpers', () => {
     expect(rec.subtitle).toBe('13800000021')
     expect(rec.values.identity).toBe('物管人员')
     expect(rec.status).toBe('有效')
+  })
+
+  it('404 toast points at /api/v1/people and PR #31', () => {
+    const msg = personApiMessage({ status: 404 }, '启停员工 PUT')
+    expect(msg).toContain('/api/v1/people')
+    expect(msg).toContain('PR #31')
+    expect(msg).toContain('404')
   })
 })

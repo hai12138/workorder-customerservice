@@ -24,11 +24,12 @@ import {
 import {
   STAFF_IDENTITIES,
   DEFAULT_STAFF_IDENTITY,
-  EXCLUDED_IDENTITIES,
+  isStaffIdentity,
   toPersonRecord,
   listPeople,
   createPerson,
   updatePerson,
+  updatePersonStatus,
   personApiMessage,
 } from './api/people.js'
 import { notifyApi } from './api/notify.js'
@@ -275,7 +276,7 @@ async function loadPeopleList({ silent = false } = {}) {
     const fallback = applyPeopleKeywordStatus(
       records('people')
         .map(toPersonRecord)
-        .filter((p) => p && !EXCLUDED_IDENTITIES.includes(String(p.values?.identity || ''))),
+        .filter((p) => p && isStaffIdentity(p.values?.identity)),
       filter,
     )
     setPeopleListCache({ items: fallback, source: 'bootstrap', error: e })
@@ -1474,9 +1475,9 @@ async function handleAction(act, a) {
     if (act === 'person-toggle-status') {
       const id = a.dataset.id
       const status = a.dataset.status
-      if (!id || !status) return toast('缺少启停参数')
+      if (!id || (status !== '停用' && status !== '有效')) return toast('缺少启停参数')
       try {
-        await updatePerson(id, { status })
+        await updatePersonStatus(id, status)
         await afterWrite(status === '停用' ? '已停用' : '已启用')
       } catch (e) {
         toast(personApiMessage(e, '启停员工 PUT'))

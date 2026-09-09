@@ -21,7 +21,7 @@ export function isStaffIdentity(identity) {
 
 export function personApiMessage(err, actionLabel) {
   if (err?.status === 404) {
-    return `${actionLabel}尚未就绪（/api/v1/people），请确认后端员工接口 PR 已合并`
+    return `${actionLabel} 404（/api/v1/people，后端 PR #31 未合）`
   }
   return err?.message || `${actionLabel}失败`
 }
@@ -63,7 +63,9 @@ export async function listPeople({ projectId, status, q } = {}) {
   if (status && status !== '全部' && status !== '全部状态') params.set('status', status)
   if (q) params.set('q', q)
   const data = await api(`/people?${params.toString()}`)
-  const items = unwrapPeopleList(data).map(toPersonRecord).filter(Boolean)
+  const items = unwrapPeopleList(data)
+    .map(toPersonRecord)
+    .filter((p) => p && isStaffIdentity(p.values?.identity))
   return { items, source: 'api' }
 }
 
@@ -86,4 +88,9 @@ export async function updatePerson(id, patch) {
     method: 'PUT',
     body: JSON.stringify(patch || {}),
   })
+}
+
+/** 启停：PUT body 仅 { status: '停用' | '有效' } */
+export async function updatePersonStatus(id, status) {
+  return updatePerson(id, { status })
 }
