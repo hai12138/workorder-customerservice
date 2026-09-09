@@ -2,7 +2,7 @@ import shell from './prototype-shell.html?raw'
 import * as P from './adapters/pages.js'
 import { badge } from './adapters/ui.js'
 import { clearSession, getSession, setProjectId } from './store/session.js'
-import { loadBootstrap, refresh, records, getSnapshot, setFilteredProjects, clearFilteredProjects, setProjectsFilterState, clearProjectsFilterState, setSpacesCache, getSpacesCache, setSelectedSpaceId, clearSelectedSpaceId, setSpacesFilterState, clearSpacesFilterState } from './store/app-state.js'
+import { loadBootstrap, refresh, records, getSnapshot, setFilteredProjects, clearFilteredProjects, setProjectsFilterState, clearProjectsFilterState, setSpacesCache, getSpacesCache, setSelectedSpaceId, clearSelectedSpaceId, setSpacesFilterState, clearSpacesFilterState, setPeopleTab, getPeopleFilterState, setPeopleFilterState, clearPeopleFilterState, getPeopleListCache, setPeopleListCache, clearPeopleListCache } from './store/app-state.js'
 import {
   createRecord,
   publishConfig,
@@ -21,6 +21,16 @@ import {
   downloadSpaceTemplate,
   importSpaces,
 } from './api/workbench.js'
+import {
+  STAFF_IDENTITIES,
+  DEFAULT_STAFF_IDENTITY,
+  EXCLUDED_IDENTITIES,
+  toPersonRecord,
+  listPeople,
+  createPerson,
+  updatePerson,
+  personApiMessage,
+} from './api/people.js'
 import { notifyApi } from './api/notify.js'
 import { agentApi } from './api/agent.js'
 import { CHINA_PCA, BUSINESS_TYPES } from './data/china-pca.js'
@@ -51,11 +61,15 @@ async function fillProjects() {
 projectSelect?.addEventListener('change', async () => {
   setProjectId(projectSelect.value)
   clearSelectedSpaceId()
+  clearPeopleListCache()
   toast('正在切换项目…')
   try {
     await refresh()
     if (current === 'spaces') {
       await loadSpacesData()
+    }
+    if (current === 'people') {
+      await loadPeopleList()
     }
     await fillProjects()
     render()
@@ -228,6 +242,65 @@ async function loadSpacesData() {
   }
 }
 
+function findPerson(id) {
+  const cached = getPeopleListCache()?.items?.find((p) => p.id === id)
+  if (cached) return cached
+  const rec = records('people').find((p) => p.id === id)
+  return rec ? toPersonRecord(rec) : null
+}
+
+function applyPeopleKeywordStatus(list, filterState) {
+  let filtered = list
+  if (filterState.status && filterState.status !== '全部') {
+    filtered = filtered.filter((p) => String(p.status) === filterState.status)
+  }
+  if (filterState.keyword) {
+    const q = filterState.keyword.toLowerCase()
+    filtered = filtered.filter((p) => {
+      const name = String(p.title || p.values?.name || '').toLowerCase()
+      const phone = String(p.subtitle || p.values?.phone || '').toLowerCase()
+      return name.includes(q) || phone.includes(q)
+    })
+  }
+  return filtered
+}
+
+async function loadPeopleList({ silent = false } = {}) {
+  const filter = getPeopleFilterState()
+  try {
+    const result = await listPeople({ q: filter.keyword, status: filter.status })
+    setPeopleListCache({ items: result.items, source: 'api', error: null })
+    return result
+  } catch (e) {
+    const fallback = applyPeopleKeywordStatus(
+      records('people')
+        .map(toPersonRecord)
+        .filter((p) => p && !EXCLUDED_IDENTITIES.includes(String(p.values?.identity || ''))),
+      filter,
+    )
+    setPeopleListCache({ items: fallback, source: 'bootstrap', error: e })
+    if (!silent) toast(personApiMessage(e, '员工列表 GET'))
+    return null
+  }
+}
+
+function personForm(rec) {
+  const name = rec?.title || rec?.values?.name || ''
+  const phone = rec?.values?.phone || (rec?.subtitle && rec.subtitle !== rec?.values?.identity ? rec.subtitle : '') || ''
+  const currentIdentity = rec?.values?.identity || DEFAULT_STAFF_IDENTITY
+  const identities = [...STAFF_IDENTITIES]
+  if (currentIdentity && !identities.includes(currentIdentity) && currentIdentity !== '—') identities.push(currentIdentity)
+  const selected = identities.includes(currentIdentity) ? currentIdentity : DEFAULT_STAFF_IDENTITY
+  const identityOpts = identities
+    .map((i) => `<option${i === selected ? ' selected' : ''}>${esc(i)}</option>`)
+    .join('')
+  return `<div class="form-grid">
+    <div class="form-row"><label>姓名</label><input id="f-name" value="${esc(name)}" placeholder="请输入姓名"></div>
+    <div class="form-row"><label>手机号</label><input id="f-phone" value="${esc(phone)}" placeholder="可选"></div>
+    <div class="form-row"><label>身份</label><select id="f-identity">${identityOpts}</select></div>
+  </div>`
+}
+
 function render() {
   document.getElementById('page').innerHTML = renderers[current]()
   document.getElementById('tabTitle').innerHTML = `${pages[current][0]} <span>×</span>`
@@ -253,6 +326,14 @@ function render() {
     setTimeout(() => {
       void loadSpacesData().then(() => {
         document.getElementById('page').innerHTML = renderers[current]()
+      })
+    }, 0)
+  }
+
+  if (current === 'people' && !getPeopleListCache()) {
+    setTimeout(() => {
+      void loadPeopleList().then(() => {
+        if (current === 'people') document.getElementById('page').innerHTML = renderers[current]()
       })
     }, 0)
   }
@@ -319,6 +400,9 @@ async function afterWrite(msg) {
     // Reload spaces if on spaces page
     if (current === 'spaces') {
       await loadSpacesData()
+    }
+    if (current === 'people') {
+      await loadPeopleList({ silent: true })
     }
     
     await fillProjects()
@@ -938,6 +1022,13 @@ async function handleAction(act, a) {
         setSpacesFilterState(keyword, typeSelect, statusSelect)
         render()
         toast('筛选条件已应用')
+      } else if (current === 'people') {
+        const keyword = document.getElementById('keyword')?.value?.trim() || ''
+        const status = document.getElementById('people-status-select')?.value || '全部'
+        setPeopleFilterState(keyword, status)
+        const result = await loadPeopleList()
+        render()
+        if (result) toast(`已加载 ${result.items.length} 位`)
       } else {
         toast('筛选条件已应用')
       }
@@ -978,6 +1069,10 @@ async function handleAction(act, a) {
       } else if (current === 'spaces') {
         clearSpacesFilterState()
         render()
+      } else if (current === 'people') {
+        clearPeopleFilterState()
+        await loadPeopleList({ silent: true })
+        render()
       }
       toast('筛选条件已重置')
       return
@@ -985,6 +1080,7 @@ async function handleAction(act, a) {
     if (act === 'refresh-bootstrap') {
       await refresh()
       await fillProjects()
+      if (current === 'people') await loadPeopleList({ silent: true })
       render()
       toast('数据已刷新')
       return
@@ -1315,38 +1411,111 @@ async function handleAction(act, a) {
       render()
       return
     }
-    if (['new-person', 'person-edit', 'person-detail', 'new-role', 'new-type', 'type-detail', 'new-field', 'new-rule', 'new-plan', 'new-agent-app'].includes(act)) {
+    if (act === 'people-tab') {
+      setPeopleTab(a.dataset.tab === 'staff' ? 'staff' : 'all')
+      render()
+      return
+    }
+    if (act === 'new-person') {
+      modal(
+        '新增项目用户',
+        personForm(null),
+        `<button class="btn" data-action="close">取消</button><button class="btn primary" data-action="save-person">保存</button>`,
+      )
+      return
+    }
+    if (act === 'person-edit') {
+      const rec = findPerson(a.dataset.id)
+      if (!rec) return toast('未找到人员')
+      modal(
+        '编辑人员',
+        personForm(rec),
+        `<button class="btn" data-action="close">取消</button><button class="btn primary" data-action="save-person" data-id="${esc(rec.id)}">保存</button>`,
+      )
+      return
+    }
+    if (act === 'person-detail') {
+      const rec = findPerson(a.dataset.id)
+      if (!rec) return toast('未找到人员')
+      drawer(
+        `${esc(rec.title)} · 人员详情`,
+        `<div class="actions">${badge(rec.status, String(rec.status).includes('停') ? 'neutral' : 'ok')}<span class="muted">${esc(rec.id)}</span></div>
+        <div class="kv" style="margin-top:15px">
+          <div><span>姓名</span><b>${esc(rec.title)}</b></div>
+          <div><span>手机号</span><b>${esc(rec.values?.phone || rec.subtitle || '—')}</b></div>
+          <div><span>身份</span><b>${esc(rec.values?.identity || '—')}</b></div>
+          <div><span>状态</span><b>${esc(rec.status)}</b></div>
+          <div><span>空间/班组</span><b>${esc(rec.values?.space || '—')}</b></div>
+          <div><span>项目</span><b>${esc(rec.values?.project || '—')}</b></div>
+          <div><span>渠道</span><b>${esc(rec.values?.channel || '—')}</b></div>
+        </div>`,
+      )
+      return
+    }
+    if (act === 'save-person') {
+      const name = document.getElementById('f-name')?.value?.trim()
+      const phone = document.getElementById('f-phone')?.value?.trim() || ''
+      const identity = document.getElementById('f-identity')?.value?.trim() || DEFAULT_STAFF_IDENTITY
+      if (!name) return toast('请填写姓名')
+      const id = a.dataset.id
+      try {
+        if (id) {
+          await updatePerson(id, { name, phone, identity })
+          await afterWrite('人员信息已更新')
+        } else {
+          await createPerson({ name, phone, identity })
+          await afterWrite('人员已创建')
+        }
+      } catch (e) {
+        toast(personApiMessage(e, id ? '编辑员工 PUT' : '新建员工 POST'))
+      }
+      return
+    }
+    if (act === 'person-toggle-status') {
+      const id = a.dataset.id
+      const status = a.dataset.status
+      if (!id || !status) return toast('缺少启停参数')
+      try {
+        await updatePerson(id, { status })
+        await afterWrite(status === '停用' ? '已停用' : '已启用')
+      } catch (e) {
+        toast(personApiMessage(e, '启停员工 PUT'))
+      }
+      return
+    }
+    if (['new-role', 'new-type', 'type-detail', 'new-field', 'new-rule', 'new-plan', 'new-agent-app'].includes(act)) {
       const collection =
-        act.includes('person') || act === 'new-person'
-          ? 'people'
-          : act.includes('role')
-            ? 'roles'
-            : act.includes('type')
-              ? 'types'
-              : act.includes('field')
-                ? 'fields'
-                : act.includes('rule')
-                  ? 'dispatch'
-                  : act.includes('plan')
-                    ? 'plans'
-                    : null
-      if (act.endsWith('-detail') || act === 'person-detail' || act === 'type-detail') {
+        act.includes('role')
+          ? 'roles'
+          : act.includes('type')
+            ? 'types'
+            : act.includes('field')
+              ? 'fields'
+              : act.includes('rule')
+                ? 'dispatch'
+                : act.includes('plan')
+                  ? 'plans'
+                  : null
+      if (act.endsWith('-detail') || act === 'type-detail') {
         modal(a.textContent.trim() || '详情', `<p class="sub">记录详情（只读演示）。</p><div class="form-grid"><div class="form-row"><label>名称</label><input value="${a.dataset.id || ''}" disabled></div></div>`, `<button class="btn" data-action="close">关闭</button>`)
         return
       }
       modal(
         a.textContent.trim() || '新建',
         `<div class="form-grid"><div class="form-row"><label>名称</label><input id="f-title" placeholder="请输入名称"></div><div class="form-row"><label>说明</label><input id="f-sub" placeholder="可选"></div></div>`,
-        `<button class="btn" data-action="close">取消</button><button class="btn primary" data-action="save-collection" data-collection="${collection || 'people'}">保存</button>`,
+        `<button class="btn" data-action="close">取消</button><button class="btn primary" data-action="save-collection" data-collection="${collection || ''}">保存</button>`,
       )
       return
     }
     if (act === 'save-collection') {
       const title = document.getElementById('f-title')?.value?.trim()
       const subtitle = document.getElementById('f-sub')?.value?.trim() || ''
-      const collection = a.dataset.collection || 'people'
+      const collection = a.dataset.collection || ''
       if (!title) return toast('请填写名称')
       if (collection === 'null' || !collection) return toast('暂不支持此创建')
+      if (collection === 'people') {
+        return toast('人员请走 POST /api/v1/people，不再使用 workbench collections')
+      }
       await createRecord(collection, { title, subtitle })
       await afterWrite('已保存')
       return

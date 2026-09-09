@@ -11,6 +11,9 @@ let projectsFilterState = { keyword: '', status: '', province: '', city: '', dis
 let spacesFilterState = { keyword: '', type: '全部', status: '全部' }
 let spacesCache = null
 let selectedSpaceId = null
+let peopleTab = 'all'
+let peopleFilterState = { keyword: '', status: '全部' }
+let peopleListCache = null
 
 export function getSnapshot() {
   return snapshot
@@ -84,6 +87,7 @@ export async function loadBootstrap(forceProjectId) {
 
 export async function refresh() {
   spacesCache = null
+  peopleListCache = null
   return loadBootstrap(getProjectId() || undefined)
 }
 
@@ -105,4 +109,36 @@ export function setSelectedSpaceId(id) {
 
 export function clearSelectedSpaceId() {
   selectedSpaceId = null
+}
+
+export function getPeopleTab() {
+  return peopleTab
+}
+
+export function setPeopleTab(tab) {
+  peopleTab = tab === 'staff' ? 'staff' : 'all'
+}
+
+export function getPeopleFilterState() {
+  return peopleFilterState
+}
+
+export function setPeopleFilterState(keyword, status) {
+  peopleFilterState = { keyword: keyword || '', status: status || '全部' }
+}
+
+export function clearPeopleFilterState() {
+  peopleFilterState = { keyword: '', status: '全部' }
+}
+
+export function getPeopleListCache() {
+  return peopleListCache
+}
+
+export function setPeopleListCache(data) {
+  peopleListCache = data
+}
+
+export function clearPeopleListCache() {
+  peopleListCache = null
 }

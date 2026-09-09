@@ -1,7 +1,8 @@
 /**
  * Live page renderers — DOM class names stay identical to the approved prototype.
  */
-import { records, dashboard as dashboardState, activities, projectId, getProjectsFilterState, getSpacesCache, getSelectedSpaceId, getSpacesFilterState } from '../store/app-state.js'
+import { records, dashboard as dashboardState, activities, projectId, getProjectsFilterState, getSpacesCache, getSelectedSpaceId, getSpacesFilterState, getPeopleTab, getPeopleFilterState, getPeopleListCache } from '../store/app-state.js'
+import { isStaffIdentity } from '../api/people.js'
 import { badge, btn, head, filters, table, footer, esc, toneBadge } from './ui.js'
 
 function metricCards(items) {
@@ -268,21 +269,64 @@ export function spaces() {
   )
 }
 
+function applyPeopleFilters(list, filterState) {
+  let filtered = list
+  if (filterState.status && filterState.status !== '全部') {
+    filtered = filtered.filter((p) => String(p.status) === filterState.status)
+  }
+  if (filterState.keyword) {
+    const q = filterState.keyword.toLowerCase()
+    filtered = filtered.filter((p) => {
+      const name = String(p.title || p.values?.name || '').toLowerCase()
+      const phone = String(p.subtitle || p.values?.phone || '').toLowerCase()
+      return name.includes(q) || phone.includes(q)
+    })
+  }
+  return filtered
+}
+
 export function peopleView() {
-  const list = records('people')
-  const rows = list.map((p) => [
-    `<div class="namecell"><strong>${esc(p.title)}</strong><span class="muted">${esc(p.subtitle)}</span></div>`,
-    esc(p.values?.identity || '—'),
-    esc(p.values?.space || '—'),
-    toneBadge(p.status, p.tone),
-    esc(p.values?.channel || '—'),
-    esc(p.values?.project || '—'),
-    `<div class="row-actions"><button class="text-btn" data-action="person-detail" data-id="${esc(p.id)}">查看</button><button class="text-btn" data-action="person-edit" data-id="${esc(p.id)}">编辑</button></div>`,
-  ])
+  const tab = getPeopleTab()
+  const filterState = getPeopleFilterState()
+  const cache = getPeopleListCache()
+  // 本刀全部/员工同源：只吃 GET /api/v1/people（失败时缓存已是 bootstrap 兜底）。
+  const source = cache?.items || []
+  const list = applyPeopleFilters(
+    tab === 'staff' ? source.filter((p) => isStaffIdentity(p.values?.identity)) : source,
+    cache?.source === 'api' ? { keyword: '', status: '全部' } : filterState,
+  )
+
+  const statusOptions = ['全部', '有效', '停用']
+  const statusSelect = statusOptions
+    .map((opt) => `<option${filterState.status === opt ? ' selected' : ''}>${opt}</option>`)
+    .join('')
+
+  const rows = list.map((p) => {
+    const stopped = String(p.status).includes('停')
+    const nextStatus = stopped ? '有效' : '停用'
+    const toggleLabel = stopped ? '启用' : '停用'
+    return [
+      `<div class="namecell"><strong>${esc(p.title)}</strong><span class="muted">${esc(p.subtitle)}</span></div>`,
+      esc(p.values?.identity || '—'),
+      esc(p.values?.space || '—'),
+      toneBadge(p.status, p.tone),
+      esc(p.values?.channel || '—'),
+      esc(p.values?.project || '—'),
+      `<div class="row-actions"><button class="text-btn" data-action="person-detail" data-id="${esc(p.id)}">查看</button><button class="text-btn" data-action="person-edit" data-id="${esc(p.id)}">编辑</button><button class="text-btn" data-action="person-toggle-status" data-id="${esc(p.id)}" data-status="${nextStatus}">${toggleLabel}</button></div>`,
+    ]
+  })
+
+  const peopleFilters = `<div class="filters">
+    <input id="keyword" placeholder="姓名 / 手机号" value="${esc(filterState.keyword)}">
+    <select id="people-status-select">${statusSelect}</select>
+    <button class="btn primary" data-action="query">查询</button>
+    <button class="btn" data-action="reset-filter">重置</button>
+  </div>`
+
   return (
     head('用户与员工管理', 'WEB-03', '维护项目用户资料与员工账号', btn('下载模板') + btn('导入项目用户') + `<button class="btn primary" data-action="new-person">新增项目用户</button>`) +
-    `<div class="tabs"><button class="tab-btn on">全部用户</button><button class="tab-btn" data-action="toast">员工账号</button></div>` +
-    filters('姓名 / 手机号') +
+    `<div class="tabs"><button class="tab-btn${tab === 'all' ? ' on' : ''}" data-action="people-tab" data-tab="all">全部用户</button><button class="tab-btn${tab === 'staff' ? ' on' : ''}" data-action="people-tab" data-tab="staff">员工账号</button></div>` +
+    peopleFilters +
     table(['姓名 / 手机号', '身份', '空间/班组', '状态', '渠道', '项目', '操作'], rows) +
     footer(`共 ${list.length} 位`)
   )
