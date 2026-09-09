@@ -13,7 +13,6 @@ let spacesCache = null
 let selectedSpaceId = null
 let peopleTab = 'all'
 let peopleFilterState = { keyword: '', status: '全部' }
-let peopleStaffCache = null
 
 export function getSnapshot() {
   return snapshot
@@ -87,7 +86,6 @@ export async function loadBootstrap(forceProjectId) {
 
 export async function refresh() {
   spacesCache = null
-  peopleStaffCache = null
   return loadBootstrap(getProjectId() || undefined)
 }
 
@@ -129,16 +127,4 @@ export function setPeopleFilterState(keyword, status) {
 
 export function clearPeopleFilterState() {
   peopleFilterState = { keyword: '', status: '全部' }
-}
-
-export function getPeopleStaffCache() {
-  return peopleStaffCache
-}
-
-export function setPeopleStaffCache(data) {
-  peopleStaffCache = data
-}
-
-export function clearPeopleStaffCache() {
-  peopleStaffCache = null
 }

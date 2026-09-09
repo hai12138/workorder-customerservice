@@ -1,7 +1,7 @@
 /**
  * Live page renderers — DOM class names stay identical to the approved prototype.
  */
-import { records, dashboard as dashboardState, activities, projectId, getProjectsFilterState, getSpacesCache, getSelectedSpaceId, getSpacesFilterState, getPeopleTab, getPeopleFilterState, getPeopleStaffCache } from '../store/app-state.js'
+import { records, dashboard as dashboardState, activities, projectId, getProjectsFilterState, getSpacesCache, getSelectedSpaceId, getSpacesFilterState, getPeopleTab, getPeopleFilterState } from '../store/app-state.js'
 import { isStaffIdentity, toPersonRecord } from '../api/people.js'
 import { badge, btn, head, filters, table, footer, esc, toneBadge } from './ui.js'
 
@@ -289,18 +289,11 @@ export function peopleView() {
   const tab = getPeopleTab()
   const filterState = getPeopleFilterState()
   const all = records('people').map(toPersonRecord).filter(Boolean)
-  const cache = getPeopleStaffCache()
-
-  let list
-  if (tab === 'staff') {
-    const source = cache?.items || all.filter((p) => isStaffIdentity(p.values?.identity))
-    list = applyPeopleFilters(
-      source.filter((p) => isStaffIdentity(p.values?.identity)),
-      filterState,
-    )
-  } else {
-    list = applyPeopleFilters(all, filterState)
-  }
+  // 员工 Tab：过滤 bootstrap records('people')。口径已定稿（物管人员，不是管家人员）。
+  const list = applyPeopleFilters(
+    tab === 'staff' ? all.filter((p) => isStaffIdentity(p.values?.identity)) : all,
+    filterState,
+  )
 
   const statusOptions = ['全部', '有效', '停用']
   const statusSelect = statusOptions
