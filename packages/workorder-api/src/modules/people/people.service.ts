@@ -17,9 +17,10 @@ export type PersonRecord = {
   phone: string | null;
   identity: string;
   status: string;
-  projectId: string;
-  projectName: string;
-  teamName: string;
+  teamName?: string;
+  channel?: string;
+  projectId?: string;
+  projectName?: string;
 };
 
 @Injectable()
@@ -113,6 +114,7 @@ export class PeopleService {
       include: {
         memberships: { include: { project: true } },
         teamMembers: { include: { team: true } },
+        channelBindings: true,
       },
     });
     if (!user || !isEmployeeIdentity(user.identity)) {
@@ -128,6 +130,7 @@ export class PeopleService {
         include: { project: true },
       },
       teamMembers: { include: { team: true } },
+      channelBindings: true,
     } as const;
   }
 
@@ -140,6 +143,7 @@ export class PeopleService {
       status: string;
       memberships: Array<{ projectId: string; project: { name: string } }>;
       teamMembers: Array<{ team: { name: string; projectId: string } }>;
+      channelBindings?: Array<unknown>;
     },
     projectId?: string,
   ): PersonRecord {
@@ -156,9 +160,10 @@ export class PeopleService {
       phone: user.phone,
       identity: user.identity,
       status: user.status,
+      teamName: team?.team.name ?? '—',
+      channel: user.channelBindings?.length ? '已绑定' : '未绑定',
       projectId: mem?.projectId ?? projectId ?? '',
       projectName: mem?.project.name ?? '—',
-      teamName: team?.team.name ?? '—',
     };
   }
 

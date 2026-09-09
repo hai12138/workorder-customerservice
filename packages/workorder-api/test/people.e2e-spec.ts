@@ -50,6 +50,16 @@ describe('People employee API (e2e)', () => {
     expect(list.every((p) => ['管理员', '物管人员', '员工'].includes(p.identity))).toBe(true);
     expect(list.find((p) => p.id === 'linyue' || p.identity === '业主')).toBeUndefined();
     expect(list.find((p) => p.id === 'admin')).toBeTruthy();
+    const sample = list[0];
+    expect(sample).toEqual(
+      expect.objectContaining({
+        id: expect.any(String),
+        name: expect.any(String),
+        identity: expect.any(String),
+        status: expect.any(String),
+      }),
+    );
+    expect(sample).toHaveProperty('phone');
   });
 
   it('GET /people 缺少 projectId 时失败', async () => {
@@ -115,34 +125,36 @@ describe('People employee API (e2e)', () => {
     expect(updated.body.data.status).toBe('有效');
   });
 
-  it('PUT status=停用 再 enable 恢复有效', async () => {
+  it('PATCH /people/:id/status 启停 有效|停用', async () => {
     const disabled = await request(app.getHttpServer())
-      .put(`/api/v1/people/${createdId}`)
+      .patch(`/api/v1/people/${createdId}/status`)
       .set('Authorization', `Bearer ${token}`)
       .send({ status: '停用' });
+    expect(disabled.status).toBeLessThan(300);
     expect(disabled.body.code).toBe(0);
     expect(disabled.body.data.status).toBe('停用');
+    expect(disabled.body.data).toEqual(
+      expect.objectContaining({
+        id: createdId,
+        name: expect.any(String),
+        identity: expect.any(String),
+        status: '停用',
+      }),
+    );
 
     const listed = await request(app.getHttpServer())
-      .get(`/api/v1/people?projectId=${projectId}&status=停用&q=E2E员工改`)
+      .get(`/api/v1/people?projectId=${projectId}&status=${encodeURIComponent('停用')}&q=${encodeURIComponent('E2E员工改')}`)
       .set('Authorization', `Bearer ${token}`);
     expect(listed.body.data.some((p: { id: string; status: string }) => p.id === createdId && p.status === '停用')).toBe(
       true,
     );
 
     const enabled = await request(app.getHttpServer())
-      .post(`/api/v1/people/${createdId}/enable`)
-      .set('Authorization', `Bearer ${token}`);
+      .patch(`/api/v1/people/${createdId}/status`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: '有效' });
     expect(enabled.body.code).toBe(0);
     expect(enabled.body.data.status).toBe('有效');
-  });
-
-  it('POST /people/:id/disable 停用', async () => {
-    const disabled = await request(app.getHttpServer())
-      .post(`/api/v1/people/${createdId}/disable`)
-      .set('Authorization', `Bearer ${token}`);
-    expect(disabled.body.code).toBe(0);
-    expect(disabled.body.data.status).toBe('停用');
   });
 
   it('workbench PUT collections/people/:id 也可编辑', async () => {

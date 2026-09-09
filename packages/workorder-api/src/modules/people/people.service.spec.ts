@@ -92,6 +92,7 @@ describe('PeopleService', () => {
         identity: '物管人员',
         status: '有效',
         teamName: '工程维修一组',
+        channel: '未绑定',
         projectId: project.id,
       });
     });
