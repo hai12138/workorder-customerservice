@@ -8,6 +8,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { HealthModule } from './modules/health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { WorkbenchModule } from './modules/workbench/workbench.module';
+import { PeopleModule } from './modules/people/people.module';
 import { NotifyModule } from './modules/notify/notify.module';
 import { AgentModule } from './modules/agent/agent.module';
 import { SpaceModule } from './modules/space/space.module';
@@ -26,6 +27,7 @@ import { SpaceModule } from './modules/space/space.module';
     NotifyModule,
     AgentModule,
     WorkbenchModule,
+    PeopleModule,
     SpaceModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: JwtAuthGuard }],

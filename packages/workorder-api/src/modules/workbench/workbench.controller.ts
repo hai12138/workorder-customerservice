@@ -2,12 +2,17 @@ import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } fro
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../../common/guards/jwt-auth.guard';
 import { RequirePermissions, RolesGuard } from '../../common/guards/roles.guard';
+import { UpdatePersonDto } from '../people/dto/update-person.dto';
+import { PeopleService } from '../people/people.service';
 import { WorkbenchService } from './workbench.service';
 
 @Controller()
 @UseGuards(RolesGuard)
 export class WorkbenchController {
-  constructor(private readonly workbench: WorkbenchService) {}
+  constructor(
+    private readonly workbench: WorkbenchService,
+    private readonly people: PeopleService,
+  ) {}
 
   @Get('workbench/bootstrap')
   bootstrap(@Query('projectId') projectId?: string) {
@@ -34,6 +39,35 @@ export class WorkbenchController {
       record: snapshot.records[name]?.[0],
       snapshot,
     }));
+  }
+
+  @Put('workbench/collections/people/:id')
+  @RequirePermissions('config:write')
+  async updatePerson(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      name?: string;
+      phone?: string;
+      identity?: string;
+      status?: string;
+      title?: string;
+      subtitle?: string;
+      values?: Record<string, string | number>;
+      projectId?: string;
+    },
+  ) {
+    const identityRaw = body.identity ?? body.values?.identity;
+    const statusRaw = body.status ?? body.values?.status;
+    const patch: UpdatePersonDto = {
+      name: body.name ?? body.title,
+      phone: body.phone ?? body.subtitle,
+    };
+    if (typeof identityRaw === 'string') patch.identity = identityRaw as UpdatePersonDto['identity'];
+    if (typeof statusRaw === 'string') patch.status = statusRaw as UpdatePersonDto['status'];
+    const person = await this.people.update(id, patch, body.projectId);
+    const snapshot = await this.workbench.bootstrap(body.projectId ?? person.projectId);
+    return { record: person, snapshot };
   }
 
   @Post('workbench/commands')

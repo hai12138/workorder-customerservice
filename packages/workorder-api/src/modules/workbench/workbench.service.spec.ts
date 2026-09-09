@@ -1,43 +1,31 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { vi } from 'vitest';
 import { WorkbenchService } from './workbench.service';
-import { PrismaService } from '../../prisma/prisma.service';
-import { RedisService } from '../../redis/redis.service';
-import { NotificationDispatcher } from '../notify/notify.service';
 
 describe('WorkbenchService - Projects QA Regression Tests', () => {
   let service: WorkbenchService;
-  let prisma: PrismaService;
+  let prisma: {
+    project: {
+      findMany: ReturnType<typeof vi.fn>;
+      findUnique: ReturnType<typeof vi.fn>;
+      findFirst: ReturnType<typeof vi.fn>;
+      create: ReturnType<typeof vi.fn>;
+      update: ReturnType<typeof vi.fn>;
+    };
+    space: { findMany: ReturnType<typeof vi.fn> };
+  };
 
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        WorkbenchService,
-        {
-          provide: PrismaService,
-          useValue: {
-            project: {
-              findMany: jest.fn(),
-              findUnique: jest.fn(),
-              findFirst: jest.fn(),
-              create: jest.fn(),
-              update: jest.fn(),
-            },
-            space: { findMany: jest.fn() },
-          },
-        },
-        {
-          provide: RedisService,
-          useValue: {},
-        },
-        {
-          provide: NotificationDispatcher,
-          useValue: {},
-        },
-      ],
-    }).compile();
-
-    service = module.get<WorkbenchService>(WorkbenchService);
-    prisma = module.get<PrismaService>(PrismaService);
+  beforeEach(() => {
+    prisma = {
+      project: {
+        findMany: vi.fn(),
+        findUnique: vi.fn(),
+        findFirst: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+      },
+      space: { findMany: vi.fn() },
+    };
+    service = new WorkbenchService(prisma as never, {} as never, {} as never);
   });
 
   describe('queryProjects - Combined Filter Query (Issue #3)', () => {
@@ -60,8 +48,8 @@ describe('WorkbenchService - Projects QA Regression Tests', () => {
         },
       ];
 
-      jest.spyOn(prisma.project, 'findMany').mockResolvedValue(mockProjects as any);
-      jest.spyOn(prisma.space, 'findMany').mockResolvedValue([]);
+      vi.spyOn(prisma.project, 'findMany').mockResolvedValue(mockProjects as any);
+      vi.spyOn(prisma.space, 'findMany').mockResolvedValue([]);
 
       await service.queryProjects({
         query: '华东',
@@ -97,8 +85,8 @@ describe('WorkbenchService - Projects QA Regression Tests', () => {
     });
 
     it('should handle partial filters (only query)', async () => {
-      jest.spyOn(prisma.project, 'findMany').mockResolvedValue([]);
-      jest.spyOn(prisma.space, 'findMany').mockResolvedValue([]);
+      vi.spyOn(prisma.project, 'findMany').mockResolvedValue([]);
+      vi.spyOn(prisma.space, 'findMany').mockResolvedValue([]);
 
       await service.queryProjects({ query: '项目' });
 
@@ -121,8 +109,8 @@ describe('WorkbenchService - Projects QA Regression Tests', () => {
     });
 
     it('should handle empty filters', async () => {
-      jest.spyOn(prisma.project, 'findMany').mockResolvedValue([]);
-      jest.spyOn(prisma.space, 'findMany').mockResolvedValue([]);
+      vi.spyOn(prisma.project, 'findMany').mockResolvedValue([]);
+      vi.spyOn(prisma.space, 'findMany').mockResolvedValue([]);
 
       await service.queryProjects({});
 
@@ -133,8 +121,8 @@ describe('WorkbenchService - Projects QA Regression Tests', () => {
     });
 
     it('should skip "全部状态" and "全部业态" filters', async () => {
-      jest.spyOn(prisma.project, 'findMany').mockResolvedValue([]);
-      jest.spyOn(prisma.space, 'findMany').mockResolvedValue([]);
+      vi.spyOn(prisma.project, 'findMany').mockResolvedValue([]);
+      vi.spyOn(prisma.space, 'findMany').mockResolvedValue([]);
 
       await service.queryProjects({
         status: '全部状态',
@@ -168,8 +156,8 @@ describe('WorkbenchService - Projects QA Regression Tests', () => {
         },
       ];
 
-      jest.spyOn(prisma.project, 'findMany').mockResolvedValue(mockProjects as any);
-      jest.spyOn(prisma.space, 'findMany').mockResolvedValue([]);
+      vi.spyOn(prisma.project, 'findMany').mockResolvedValue(mockProjects as any);
+      vi.spyOn(prisma.space, 'findMany').mockResolvedValue([]);
 
       const result = await service.queryProjects({});
 
@@ -208,8 +196,8 @@ describe('WorkbenchService - Projects QA Regression Tests', () => {
         },
       ];
 
-      jest.spyOn(prisma.project, 'findMany').mockResolvedValue(mockProjects as any);
-      jest.spyOn(prisma.space, 'findMany').mockResolvedValue([]);
+      vi.spyOn(prisma.project, 'findMany').mockResolvedValue(mockProjects as any);
+      vi.spyOn(prisma.space, 'findMany').mockResolvedValue([]);
 
       const result = await service.queryProjects({});
 
