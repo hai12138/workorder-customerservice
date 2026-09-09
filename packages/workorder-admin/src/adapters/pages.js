@@ -1,8 +1,8 @@
 /**
  * Live page renderers — DOM class names stay identical to the approved prototype.
  */
-import { records, dashboard as dashboardState, activities, projectId, getProjectsFilterState, getSpacesCache, getSelectedSpaceId, getSpacesFilterState, getPeopleTab, getPeopleFilterState } from '../store/app-state.js'
-import { isStaffIdentity, toPersonRecord } from '../api/people.js'
+import { records, dashboard as dashboardState, activities, projectId, getProjectsFilterState, getSpacesCache, getSelectedSpaceId, getSpacesFilterState, getPeopleTab, getPeopleFilterState, getPeopleListCache } from '../store/app-state.js'
+import { isStaffIdentity } from '../api/people.js'
 import { badge, btn, head, filters, table, footer, esc, toneBadge } from './ui.js'
 
 function metricCards(items) {
@@ -288,11 +288,12 @@ function applyPeopleFilters(list, filterState) {
 export function peopleView() {
   const tab = getPeopleTab()
   const filterState = getPeopleFilterState()
-  const all = records('people').map(toPersonRecord).filter(Boolean)
-  // 员工 Tab：过滤 bootstrap records('people')。口径已定稿（物管人员，不是管家人员）。
+  const cache = getPeopleListCache()
+  // 本刀全部/员工同源：只吃 GET /api/v1/people（失败时缓存已是 bootstrap 兜底）。
+  const source = cache?.items || []
   const list = applyPeopleFilters(
-    tab === 'staff' ? all.filter((p) => isStaffIdentity(p.values?.identity)) : all,
-    filterState,
+    tab === 'staff' ? source.filter((p) => isStaffIdentity(p.values?.identity)) : source,
+    cache?.source === 'api' ? { keyword: '', status: '全部' } : filterState,
   )
 
   const statusOptions = ['全部', '有效', '停用']

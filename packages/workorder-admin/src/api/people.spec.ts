@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { isStaffIdentity, toPersonRecord, STAFF_IDENTITIES, EXCLUDED_IDENTITIES, PERSON_STATUSES } from './people.js'
+import {
+  isStaffIdentity,
+  toPersonRecord,
+  unwrapPeopleList,
+  STAFF_IDENTITIES,
+  EXCLUDED_IDENTITIES,
+  PERSON_STATUSES,
+} from './people.js'
 
-describe('people staff口径', () => {
+describe('people /api/v1/people helpers', () => {
   it('locks staff identity to 物管人员 not 管家人员', () => {
     expect(STAFF_IDENTITIES).toEqual(['管理员', '物管人员', '员工'])
     expect(STAFF_IDENTITIES).not.toContain('管家人员')
@@ -15,15 +22,21 @@ describe('people staff口径', () => {
     expect(isStaffIdentity('租户')).toBe(false)
   })
 
-  it('maps bootstrap-shaped record', () => {
+  it('unwraps list data as array', () => {
+    expect(unwrapPeopleList([{ id: '1' }])).toEqual([{ id: '1' }])
+    expect(unwrapPeopleList({ items: [{ id: '2' }] })).toEqual([{ id: '2' }])
+  })
+
+  it('maps API item { id, name, phone, identity, status }', () => {
     const rec = toPersonRecord({
       id: 'u1',
-      title: '赵晴',
-      subtitle: '13800000021',
+      name: '赵晴',
+      phone: '13800000021',
+      identity: '物管人员',
       status: '有效',
-      values: { identity: '物管人员' },
     })
     expect(rec.title).toBe('赵晴')
+    expect(rec.subtitle).toBe('13800000021')
     expect(rec.values.identity).toBe('物管人员')
     expect(rec.status).toBe('有效')
   })

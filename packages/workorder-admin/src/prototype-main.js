@@ -2,7 +2,7 @@ import shell from './prototype-shell.html?raw'
 import * as P from './adapters/pages.js'
 import { badge } from './adapters/ui.js'
 import { clearSession, getSession, setProjectId } from './store/session.js'
-import { loadBootstrap, refresh, records, getSnapshot, setFilteredProjects, clearFilteredProjects, setProjectsFilterState, clearProjectsFilterState, setSpacesCache, getSpacesCache, setSelectedSpaceId, clearSelectedSpaceId, setSpacesFilterState, clearSpacesFilterState, setPeopleTab, setPeopleFilterState, clearPeopleFilterState } from './store/app-state.js'
+import { loadBootstrap, refresh, records, getSnapshot, setFilteredProjects, clearFilteredProjects, setProjectsFilterState, clearProjectsFilterState, setSpacesCache, getSpacesCache, setSelectedSpaceId, clearSelectedSpaceId, setSpacesFilterState, clearSpacesFilterState, setPeopleTab, getPeopleFilterState, setPeopleFilterState, clearPeopleFilterState, getPeopleListCache, setPeopleListCache, clearPeopleListCache } from './store/app-state.js'
 import {
   createRecord,
   publishConfig,
@@ -24,7 +24,12 @@ import {
 import {
   STAFF_IDENTITIES,
   DEFAULT_STAFF_IDENTITY,
+  EXCLUDED_IDENTITIES,
   toPersonRecord,
+  listPeople,
+  createPerson,
+  updatePerson,
+  personApiMessage,
 } from './api/people.js'
 import { notifyApi } from './api/notify.js'
 import { agentApi } from './api/agent.js'
@@ -56,11 +61,15 @@ async function fillProjects() {
 projectSelect?.addEventListener('change', async () => {
   setProjectId(projectSelect.value)
   clearSelectedSpaceId()
+  clearPeopleListCache()
   toast('正在切换项目…')
   try {
     await refresh()
     if (current === 'spaces') {
       await loadSpacesData()
+    }
+    if (current === 'people') {
+      await loadPeopleList()
     }
     await fillProjects()
     render()
@@ -234,8 +243,45 @@ async function loadSpacesData() {
 }
 
 function findPerson(id) {
+  const cached = getPeopleListCache()?.items?.find((p) => p.id === id)
+  if (cached) return cached
   const rec = records('people').find((p) => p.id === id)
   return rec ? toPersonRecord(rec) : null
+}
+
+function applyPeopleKeywordStatus(list, filterState) {
+  let filtered = list
+  if (filterState.status && filterState.status !== '全部') {
+    filtered = filtered.filter((p) => String(p.status) === filterState.status)
+  }
+  if (filterState.keyword) {
+    const q = filterState.keyword.toLowerCase()
+    filtered = filtered.filter((p) => {
+      const name = String(p.title || p.values?.name || '').toLowerCase()
+      const phone = String(p.subtitle || p.values?.phone || '').toLowerCase()
+      return name.includes(q) || phone.includes(q)
+    })
+  }
+  return filtered
+}
+
+async function loadPeopleList({ silent = false } = {}) {
+  const filter = getPeopleFilterState()
+  try {
+    const result = await listPeople({ q: filter.keyword, status: filter.status })
+    setPeopleListCache({ items: result.items, source: 'api', error: null })
+    return result
+  } catch (e) {
+    const fallback = applyPeopleKeywordStatus(
+      records('people')
+        .map(toPersonRecord)
+        .filter((p) => p && !EXCLUDED_IDENTITIES.includes(String(p.values?.identity || ''))),
+      filter,
+    )
+    setPeopleListCache({ items: fallback, source: 'bootstrap', error: e })
+    if (!silent) toast(personApiMessage(e, '员工列表 GET'))
+    return null
+  }
 }
 
 function personForm(rec) {
@@ -280,6 +326,14 @@ function render() {
     setTimeout(() => {
       void loadSpacesData().then(() => {
         document.getElementById('page').innerHTML = renderers[current]()
+      })
+    }, 0)
+  }
+
+  if (current === 'people' && !getPeopleListCache()) {
+    setTimeout(() => {
+      void loadPeopleList().then(() => {
+        if (current === 'people') document.getElementById('page').innerHTML = renderers[current]()
       })
     }, 0)
   }
@@ -346,6 +400,9 @@ async function afterWrite(msg) {
     // Reload spaces if on spaces page
     if (current === 'spaces') {
       await loadSpacesData()
+    }
+    if (current === 'people') {
+      await loadPeopleList({ silent: true })
     }
     
     await fillProjects()
@@ -969,8 +1026,9 @@ async function handleAction(act, a) {
         const keyword = document.getElementById('keyword')?.value?.trim() || ''
         const status = document.getElementById('people-status-select')?.value || '全部'
         setPeopleFilterState(keyword, status)
+        const result = await loadPeopleList()
         render()
-        toast('筛选条件已应用')
+        if (result) toast(`已加载 ${result.items.length} 位`)
       } else {
         toast('筛选条件已应用')
       }
@@ -1013,6 +1071,7 @@ async function handleAction(act, a) {
         render()
       } else if (current === 'people') {
         clearPeopleFilterState()
+        await loadPeopleList({ silent: true })
         render()
       }
       toast('筛选条件已重置')
@@ -1021,6 +1080,7 @@ async function handleAction(act, a) {
     if (act === 'refresh-bootstrap') {
       await refresh()
       await fillProjects()
+      if (current === 'people') await loadPeopleList({ silent: true })
       render()
       toast('数据已刷新')
       return
@@ -1398,15 +1458,29 @@ async function handleAction(act, a) {
       const identity = document.getElementById('f-identity')?.value?.trim() || DEFAULT_STAFF_IDENTITY
       if (!name) return toast('请填写姓名')
       const id = a.dataset.id
-      if (id) {
-        return toast('编辑待后端提供 people update 接口')
+      try {
+        if (id) {
+          await updatePerson(id, { name, phone, identity })
+          await afterWrite('人员信息已更新')
+        } else {
+          await createPerson({ name, phone, identity })
+          await afterWrite('人员已创建')
+        }
+      } catch (e) {
+        toast(personApiMessage(e, id ? '编辑员工 PUT' : '新建员工 POST'))
       }
-      await createRecord('people', { title: name, subtitle: phone, values: { identity } })
-      await afterWrite('人员已创建')
       return
     }
     if (act === 'person-toggle-status') {
-      toast('启停待后端提供 people update 接口')
+      const id = a.dataset.id
+      const status = a.dataset.status
+      if (!id || !status) return toast('缺少启停参数')
+      try {
+        await updatePerson(id, { status })
+        await afterWrite(status === '停用' ? '已停用' : '已启用')
+      } catch (e) {
+        toast(personApiMessage(e, '启停员工 PUT'))
+      }
       return
     }
     if (['new-role', 'new-type', 'type-detail', 'new-field', 'new-rule', 'new-plan', 'new-agent-app'].includes(act)) {
@@ -1436,9 +1510,12 @@ async function handleAction(act, a) {
     if (act === 'save-collection') {
       const title = document.getElementById('f-title')?.value?.trim()
       const subtitle = document.getElementById('f-sub')?.value?.trim() || ''
-      const collection = a.dataset.collection || 'people'
+      const collection = a.dataset.collection || ''
       if (!title) return toast('请填写名称')
       if (collection === 'null' || !collection) return toast('暂不支持此创建')
+      if (collection === 'people') {
+        return toast('人员请走 POST /api/v1/people，不再使用 workbench collections')
+      }
       await createRecord(collection, { title, subtitle })
       await afterWrite('已保存')
       return
