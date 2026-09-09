@@ -125,9 +125,9 @@ describe('People employee API (e2e)', () => {
     expect(updated.body.data.status).toBe('有效');
   });
 
-  it('PATCH /people/:id/status 启停 有效|停用', async () => {
+  it('PUT /people/:id 启停 status=有效|停用', async () => {
     const disabled = await request(app.getHttpServer())
-      .patch(`/api/v1/people/${createdId}/status`)
+      .put(`/api/v1/people/${createdId}`)
       .set('Authorization', `Bearer ${token}`)
       .send({ status: '停用' });
     expect(disabled.status).toBeLessThan(300);
@@ -150,7 +150,7 @@ describe('People employee API (e2e)', () => {
     );
 
     const enabled = await request(app.getHttpServer())
-      .patch(`/api/v1/people/${createdId}/status`)
+      .put(`/api/v1/people/${createdId}`)
       .set('Authorization', `Bearer ${token}`)
       .send({ status: '有效' });
     expect(enabled.body.code).toBe(0);
