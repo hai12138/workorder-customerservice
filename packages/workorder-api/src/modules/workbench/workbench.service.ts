@@ -4,6 +4,7 @@ import { entity, type EntityRecord, toneFromStatus } from '../../common/entity-r
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
 import { NotificationDispatcher } from '../notify/notify.service';
+import { isEmployeeIdentity } from '../people/people.constants';
 
 type WorkbenchCommand =
   | { type: 'publish-config'; version: string; projectId?: string }
@@ -181,17 +182,24 @@ export class WorkbenchService {
           children: s.children.length,
         }),
       ),
-      people: people.map((u) => {
-        const mem = u.memberships[0];
-        const team = u.teamMembers[0]?.team.name;
-        const spaceOrTeam = team ?? '—';
-        return entity(u.id, u.name, u.phone ?? u.identity, u.status, {
-          identity: u.identity,
-          project: mem?.project.name ?? '—',
-          space: spaceOrTeam,
-          channel: u.channelBindings.length ? '已绑定' : '未绑定',
-        });
-      }),
+      people: people
+        .filter(
+          (u) =>
+            isEmployeeIdentity(u.identity) && u.memberships.some((m) => m.projectId === projectId),
+        )
+        .map((u) => {
+          const mem = u.memberships.find((m) => m.projectId === projectId) ?? u.memberships[0];
+          const team =
+            u.teamMembers.find((tm) => tm.team.projectId === projectId)?.team.name ??
+            u.teamMembers[0]?.team.name;
+          return entity(u.id, u.name, u.phone ?? u.identity, u.status, {
+            identity: u.identity,
+            phone: u.phone ?? '—',
+            project: mem?.project.name ?? '—',
+            space: team ?? '—',
+            channel: u.channelBindings.length ? '已绑定' : '未绑定',
+          });
+        }),
       roles: roles.map((r) =>
         entity(r.id, r.name, r.code, r.status, {
           scope: r.scope,
