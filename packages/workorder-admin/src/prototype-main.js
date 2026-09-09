@@ -280,7 +280,7 @@ async function loadPeopleList({ silent = false } = {}) {
       filter,
     )
     setPeopleListCache({ items: fallback, source: 'bootstrap', error: e })
-    if (!silent) toast(personApiMessage(e, '员工列表 GET'))
+    if (!silent) toast(personApiMessage(e, 'GET /api/v1/people'))
     return null
   }
 }
@@ -1468,7 +1468,7 @@ async function handleAction(act, a) {
           await afterWrite('人员已创建')
         }
       } catch (e) {
-        toast(personApiMessage(e, id ? '编辑员工 PUT' : '新建员工 POST'))
+        toast(personApiMessage(e, id ? 'PUT /api/v1/people/:id' : 'POST /api/v1/people'))
       }
       return
     }
@@ -1480,7 +1480,7 @@ async function handleAction(act, a) {
         await updatePersonStatus(id, status)
         await afterWrite(status === '停用' ? '已停用' : '已启用')
       } catch (e) {
-        toast(personApiMessage(e, '启停员工 PUT'))
+        toast(personApiMessage(e, 'PUT /api/v1/people/:id'))
       }
       return
     }

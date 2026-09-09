@@ -43,7 +43,7 @@ describe('people /api/v1/people helpers', () => {
   })
 
   it('404 toast points at /api/v1/people and PR #31', () => {
-    const msg = personApiMessage({ status: 404 }, '启停员工 PUT')
+    const msg = personApiMessage({ status: 404 }, 'PUT /api/v1/people/:id')
     expect(msg).toContain('/api/v1/people')
     expect(msg).toContain('PR #31')
     expect(msg).toContain('404')

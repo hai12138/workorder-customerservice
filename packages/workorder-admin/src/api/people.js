@@ -21,7 +21,7 @@ export function isStaffIdentity(identity) {
 
 export function personApiMessage(err, actionLabel) {
   if (err?.status === 404) {
-    return `${actionLabel} 404（/api/v1/people，后端 PR #31 未合）`
+    return `${actionLabel} 404（后端 PR #31 未合）`
   }
   return err?.message || `${actionLabel}失败`
 }
@@ -69,14 +69,12 @@ export async function listPeople({ projectId, status, q } = {}) {
   return { items, source: 'api' }
 }
 
+/** 对齐 PR #31 curl：POST { projectId, name, phone }；identity 可选，默认后端物管人员 */
 export async function createPerson({ projectId, name, phone, identity } = {}) {
   const pid = projectId || getProjectId()
-  const body = {
-    projectId: pid,
-    name,
-    identity: identity || DEFAULT_STAFF_IDENTITY,
-  }
+  const body = { projectId: pid, name }
   if (phone) body.phone = phone
+  if (identity && identity !== DEFAULT_STAFF_IDENTITY) body.identity = identity
   return api('/people', {
     method: 'POST',
     body: JSON.stringify(body),
@@ -90,7 +88,10 @@ export async function updatePerson(id, patch) {
   })
 }
 
-/** 启停：PUT body 仅 { status: '停用' | '有效' } */
+/** 对齐 PR #31 curl：PUT /api/v1/people/:id {"status":"停用"} */
 export async function updatePersonStatus(id, status) {
-  return updatePerson(id, { status })
+  return api(`/people/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ status }),
+  })
 }
