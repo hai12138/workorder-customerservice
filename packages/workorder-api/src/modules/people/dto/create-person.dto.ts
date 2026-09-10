@@ -1,7 +1,11 @@
 import { IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator';
-import { EMPLOYEE_IDENTITIES } from '../people.constants';
+import { ALL_PEOPLE_IDENTITIES, PEOPLE_SCOPES, USER_STATUSES } from '../people.constants';
 
 export class CreatePersonDto {
+  @IsIn([...PEOPLE_SCOPES])
+  @IsOptional()
+  scope?: (typeof PEOPLE_SCOPES)[number];
+
   @IsString()
   @IsNotEmpty()
   projectId!: string;
@@ -14,7 +18,11 @@ export class CreatePersonDto {
   @IsOptional()
   phone?: string;
 
-  @IsIn([...EMPLOYEE_IDENTITIES])
+  @IsIn([...ALL_PEOPLE_IDENTITIES])
   @IsOptional()
-  identity?: (typeof EMPLOYEE_IDENTITIES)[number];
+  identity?: (typeof ALL_PEOPLE_IDENTITIES)[number];
+
+  @IsIn([...USER_STATUSES])
+  @IsOptional()
+  status?: (typeof USER_STATUSES)[number];
 }

@@ -1,5 +1,5 @@
 import { IsIn, IsOptional, IsString } from 'class-validator';
-import { EMPLOYEE_IDENTITIES, USER_STATUSES } from '../people.constants';
+import { ALL_PEOPLE_IDENTITIES, USER_STATUSES } from '../people.constants';
 
 export class UpdatePersonDto {
   @IsString()
@@ -10,9 +10,9 @@ export class UpdatePersonDto {
   @IsOptional()
   phone?: string;
 
-  @IsIn([...EMPLOYEE_IDENTITIES])
+  @IsIn([...ALL_PEOPLE_IDENTITIES])
   @IsOptional()
-  identity?: (typeof EMPLOYEE_IDENTITIES)[number];
+  identity?: (typeof ALL_PEOPLE_IDENTITIES)[number];
 
   @IsIn([...USER_STATUSES])
   @IsOptional()
