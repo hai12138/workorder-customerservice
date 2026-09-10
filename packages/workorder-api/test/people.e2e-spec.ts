@@ -12,6 +12,7 @@ describe('People API (e2e)', () => {
   let projectId = 'prj_xinglan';
   let createdId = '';
   let createdUserId = '';
+  let spaceUserId = '';
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -87,7 +88,9 @@ describe('People API (e2e)', () => {
     const list = res.body.data as Array<{
       id: string;
       identity: string;
-      spaceLabel: null;
+      spaceId: string | null;
+      spaceLabel: string | null;
+      spacePath: string | null;
       relationStatus: null;
       relationSource: null;
       updatedAt: string;
@@ -96,8 +99,19 @@ describe('People API (e2e)', () => {
     expect(list.length).toBeGreaterThan(0);
     expect(list.every((p) => ['业主', '租户', '家属', '类型未设置'].includes(p.identity))).toBe(true);
     expect(list.find((p) => p.id === 'admin' || p.identity === '物管人员')).toBeUndefined();
-    expect(list.find((p) => p.id === 'linyue')).toBeTruthy();
-    expect(list.find((p) => p.id === 'jiashu' && p.identity === '家属')).toBeTruthy();
+    expect(list.find((p) => p.id === 'linyue')).toEqual(
+      expect.objectContaining({
+        id: 'linyue',
+        spaceId: 'sp_bld_1',
+        spaceLabel: '1栋',
+        spacePath: '1栋',
+        relationStatus: null,
+        relationSource: null,
+      }),
+    );
+    expect(list.find((p) => p.id === 'jiashu' && p.identity === '家属')).toEqual(
+      expect.objectContaining({ id: 'jiashu', spaceId: null, spaceLabel: null, spacePath: null }),
+    );
     expect(list.find((p) => p.id === 'weizhi' && p.identity === '类型未设置')).toBeTruthy();
     const sample = list[0];
     expect(sample).toEqual(
@@ -106,12 +120,14 @@ describe('People API (e2e)', () => {
         name: expect.any(String),
         identity: expect.any(String),
         status: expect.any(String),
-        spaceLabel: null,
         relationStatus: null,
         relationSource: null,
       }),
     );
     expect(sample).toHaveProperty('phone');
+    expect(sample).toHaveProperty('spaceId');
+    expect(sample).toHaveProperty('spaceLabel');
+    expect(sample).toHaveProperty('spacePath');
     expect(sample.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(sample).not.toHaveProperty('employeeNo');
   });
@@ -248,7 +264,9 @@ describe('People API (e2e)', () => {
     expect(created.body.data.phone).toBe('13900004444');
     expect(created.body.data.identity).toBe('业主');
     expect(created.body.data.status).toBe('有效');
+    expect(created.body.data.spaceId).toBeNull();
     expect(created.body.data.spaceLabel).toBeNull();
+    expect(created.body.data.spacePath).toBeNull();
     expect(created.body.data.relationStatus).toBeNull();
     expect(created.body.data.relationSource).toBeNull();
     expect(created.body.data.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
@@ -286,7 +304,9 @@ describe('People API (e2e)', () => {
     expect(updated.body.data.phone).toBe('13900005555');
     expect(updated.body.data.identity).toBe('租户');
     expect(updated.body.data.status).toBe('有效');
+    expect(updated.body.data.spaceId).toBeNull();
     expect(updated.body.data.spaceLabel).toBeNull();
+    expect(updated.body.data.spacePath).toBeNull();
   });
 
   it('PUT /people/:id 用户启停 status=有效|停用', async () => {
@@ -329,5 +349,145 @@ describe('People API (e2e)', () => {
       .send({ identity: '员工' });
     expect(userCross.status).toBeGreaterThanOrEqual(400);
     expect(userCross.body.code).not.toBe(0);
+  });
+
+  it('POST /people scope=users 带 spaceId：创建回显 + 列表回显 spacePath', async () => {
+    const floor = await request(app.getHttpServer())
+      .post('/api/v1/spaces')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        projectId,
+        parentId: 'sp_bld_1',
+        name: 'E2E常用层',
+        type: '楼层',
+      });
+    expect(floor.status).toBeLessThan(300);
+    expect(floor.body.code).toBe(0);
+    const childSpaceId = floor.body.data.id as string;
+    expect(childSpaceId).toBeTruthy();
+
+    const created = await request(app.getHttpServer())
+      .post('/api/v1/people')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        scope: 'users',
+        projectId,
+        name: 'E2E带空间业主',
+        phone: '13900006666',
+        spaceId: childSpaceId,
+      });
+    expect(created.status).toBeLessThan(300);
+    expect(created.body.code).toBe(0);
+    expect(created.body.data).toEqual(
+      expect.objectContaining({
+        name: 'E2E带空间业主',
+        spaceId: childSpaceId,
+        spaceLabel: 'E2E常用层',
+        spacePath: '1栋/E2E常用层',
+        relationStatus: null,
+        relationSource: null,
+      }),
+    );
+    spaceUserId = created.body.data.id;
+    expect(spaceUserId).toBeTruthy();
+
+    const list = await request(app.getHttpServer())
+      .get(`/api/v1/people?projectId=${projectId}&scope=users&q=${encodeURIComponent('E2E带空间业主')}`)
+      .set('Authorization', `Bearer ${token}`);
+    const row = list.body.data.find((p: { id: string }) => p.id === spaceUserId);
+    expect(row).toEqual(
+      expect.objectContaining({
+        spaceId: childSpaceId,
+        spaceLabel: 'E2E常用层',
+        spacePath: '1栋/E2E常用层',
+      }),
+    );
+  });
+
+  it('PUT /people/:id 改常用空间、省略不改、显式 null 清空', async () => {
+    const changed = await request(app.getHttpServer())
+      .put(`/api/v1/people/${spaceUserId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ spaceId: 'sp_bld_2' });
+    expect(changed.status).toBeLessThan(300);
+    expect(changed.body.code).toBe(0);
+    expect(changed.body.data).toEqual(
+      expect.objectContaining({
+        spaceId: 'sp_bld_2',
+        spaceLabel: '2栋',
+        spacePath: '2栋',
+      }),
+    );
+
+    const omitted = await request(app.getHttpServer())
+      .put(`/api/v1/people/${spaceUserId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'E2E带空间业主改' });
+    expect(omitted.body.code).toBe(0);
+    expect(omitted.body.data.name).toBe('E2E带空间业主改');
+    expect(omitted.body.data.spaceId).toBe('sp_bld_2');
+    expect(omitted.body.data.spaceLabel).toBe('2栋');
+    expect(omitted.body.data.spacePath).toBe('2栋');
+
+    const cleared = await request(app.getHttpServer())
+      .put(`/api/v1/people/${spaceUserId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ spaceId: null });
+    expect(cleared.body.code).toBe(0);
+    expect(cleared.body.data.spaceId).toBeNull();
+    expect(cleared.body.data.spaceLabel).toBeNull();
+    expect(cleared.body.data.spacePath).toBeNull();
+  });
+
+  it('POST /people scope=users 跨项目 spaceId 返回 400', async () => {
+    const other = await request(app.getHttpServer())
+      .post('/api/v1/spaces')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        projectId: 'prj_yunqi',
+        name: 'E2E云栖楼',
+        type: '楼栋',
+      });
+    expect(other.status).toBeLessThan(300);
+    const otherSpaceId = other.body.data.id as string;
+
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/people')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        scope: 'users',
+        projectId,
+        name: 'E2E跨项目空间',
+        spaceId: otherSpaceId,
+      });
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(res.body.code).not.toBe(0);
+
+    const listed = await request(app.getHttpServer())
+      .get(`/api/v1/people?projectId=${projectId}&scope=users&q=${encodeURIComponent('E2E跨项目空间')}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(listed.body.data.some((p: { name: string }) => p.name === 'E2E跨项目空间')).toBe(false);
+
+    const putCross = await request(app.getHttpServer())
+      .put(`/api/v1/people/${spaceUserId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ spaceId: otherSpaceId });
+    expect(putCross.status).toBeGreaterThanOrEqual(400);
+    expect(putCross.body.code).not.toBe(0);
+  });
+
+  it('staff scope 忽略 spaceId（非法 id 仍可创建员工）', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/people')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        projectId,
+        name: 'E2E忽略空间员工',
+        spaceId: 'not-a-space',
+      });
+    expect(res.status).toBeLessThan(300);
+    expect(res.body.code).toBe(0);
+    expect(res.body.data.identity).toBe('物管人员');
+    expect(res.body.data).not.toHaveProperty('spaceId');
   });
 });

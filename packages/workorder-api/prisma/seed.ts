@@ -250,18 +250,6 @@ export async function main() {
     ],
   });
 
-  await prisma.projectMember.createMany({
-    data: [
-      { projectId: PROJECT_XINGLAN_ID, userId: 'admin' },
-      { projectId: PROJECT_XINGLAN_ID, userId: 'zhaoqing' },
-      { projectId: PROJECT_XINGLAN_ID, userId: 'chenbin' },
-      { projectId: PROJECT_XINGLAN_ID, userId: 'linzhou' },
-      { projectId: PROJECT_XINGLAN_ID, userId: 'linyue' },
-      { projectId: PROJECT_XINGLAN_ID, userId: 'jiashu' },
-      { projectId: PROJECT_XINGLAN_ID, userId: 'weizhi' },
-    ],
-  });
-
   // --- spaces (星澜花园) ---
   await prisma.space.createMany({
     data: [
@@ -286,6 +274,18 @@ export async function main() {
         type: 'PARKING',
         status: 'AVAILABLE',
       },
+    ],
+  });
+
+  await prisma.projectMember.createMany({
+    data: [
+      { projectId: PROJECT_XINGLAN_ID, userId: 'admin' },
+      { projectId: PROJECT_XINGLAN_ID, userId: 'zhaoqing' },
+      { projectId: PROJECT_XINGLAN_ID, userId: 'chenbin' },
+      { projectId: PROJECT_XINGLAN_ID, userId: 'linzhou' },
+      { projectId: PROJECT_XINGLAN_ID, userId: 'linyue', preferredSpaceId: 'sp_bld_1' },
+      { projectId: PROJECT_XINGLAN_ID, userId: 'jiashu' },
+      { projectId: PROJECT_XINGLAN_ID, userId: 'weizhi' },
     ],
   });
 

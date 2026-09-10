@@ -100,11 +100,13 @@ model Project {
 }
 
 model ProjectMember {
-  id        String @id @default(cuid())
-  projectId String @map("project_id")
-  userId    String @map("user_id")
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String  @id @default(cuid())
+  projectId        String  @map("project_id")
+  userId           String  @map("user_id")
+  preferredSpaceId String? @map("preferred_space_id")
+  project          Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user             User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  preferredSpace   Space?  @relation(fields: [preferredSpaceId], references: [id], onDelete: SetNull)
 
   @@unique([projectId, userId])
   @@map("project_members")
@@ -131,9 +133,10 @@ model Space {
   type      SpaceType   @default(BUILDING)
   status    SpaceStatus @default(AVAILABLE)
   createdAt DateTime    @default(now()) @map("created_at")
-  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parent    Space?      @relation("SpaceTree", fields: [parentId], references: [id])
-  children  Space[]     @relation("SpaceTree")
+  project            Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent             Space?          @relation("SpaceTree", fields: [parentId], references: [id])
+  children           Space[]         @relation("SpaceTree")
+  preferredByMembers ProjectMember[]
 
   @@map("spaces")
 }

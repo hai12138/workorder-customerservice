@@ -22,6 +22,7 @@ describe('PeopleService', () => {
       create: ReturnType<typeof vi.fn>;
       update: ReturnType<typeof vi.fn>;
     };
+    space: { findUnique: ReturnType<typeof vi.fn>; findMany: ReturnType<typeof vi.fn> };
     $transaction: ReturnType<typeof vi.fn>;
   };
 
@@ -34,7 +35,7 @@ describe('PeopleService', () => {
     identity: '物管人员',
     status: '有效',
     createdAt,
-    memberships: [{ projectId: project.id, project }],
+    memberships: [{ projectId: project.id, preferredSpaceId: null, project }],
     teamMembers: [{ team: { name: '工程维修一组', projectId: project.id } }],
     roles: [{ role: { name: '物业客服' } }],
     channelBindings: [],
@@ -46,7 +47,7 @@ describe('PeopleService', () => {
     identity: '业主',
     status: '有效',
     createdAt,
-    memberships: [{ projectId: project.id, project }],
+    memberships: [{ projectId: project.id, preferredSpaceId: null, project }],
     teamMembers: [],
     roles: [],
     channelBindings: [],
@@ -61,9 +62,12 @@ describe('PeopleService', () => {
         create: vi.fn(),
         update: vi.fn(),
       },
+      space: { findUnique: vi.fn(), findMany: vi.fn() },
       $transaction: vi.fn(),
     };
     prisma.$transaction.mockImplementation(async (fn: (tx: typeof prisma) => Promise<unknown>) => fn(prisma));
+    prisma.space.findMany.mockResolvedValue([]);
+    prisma.space.findUnique.mockResolvedValue(null);
     service = new PeopleService(prisma as never);
   });
 
@@ -158,11 +162,36 @@ describe('PeopleService', () => {
         phone: '138001381208',
         identity: '业主',
         status: '有效',
+        spaceId: null,
         spaceLabel: null,
+        spacePath: null,
         relationStatus: null,
         relationSource: null,
         updatedAt: '2026-01-15T08:00:00.000Z',
         projectId: project.id,
+      });
+    });
+
+    it('scope=users：绑定常用空间时回显 spaceId/spaceLabel/spacePath（含子节点路径）', async () => {
+      prisma.project.findUnique.mockResolvedValue(project);
+      prisma.space.findMany.mockResolvedValue([
+        { id: 'sp_bld_1', name: '1栋', parentId: null },
+        { id: 'sp_room_1702', name: '1702', parentId: 'sp_bld_1' },
+      ]);
+      prisma.user.findMany.mockResolvedValue([
+        {
+          ...ownerUser,
+          memberships: [{ projectId: project.id, preferredSpaceId: 'sp_room_1702', project }],
+        },
+      ]);
+
+      const result = await service.list({ projectId: project.id, scope: 'users' });
+
+      expect(result[0]).toMatchObject({
+        id: 'linyue',
+        spaceId: 'sp_room_1702',
+        spaceLabel: '1702',
+        spacePath: '1栋/1702',
       });
     });
 
@@ -240,11 +269,97 @@ describe('PeopleService', () => {
       );
       expect(created).toMatchObject({
         identity: '业主',
+        spaceId: null,
         spaceLabel: null,
+        spacePath: null,
         relationStatus: null,
         relationSource: null,
         updatedAt: '2026-01-15T08:00:00.000Z',
       });
+    });
+
+    it('scope=users：合法 spaceId 写入 membership.preferredSpaceId 并回显路径', async () => {
+      prisma.project.findUnique.mockResolvedValue(project);
+      prisma.space.findUnique.mockResolvedValue({
+        id: 'sp_bld_1',
+        projectId: project.id,
+        name: '1栋',
+        parentId: null,
+      });
+      prisma.space.findMany.mockResolvedValue([{ id: 'sp_bld_1', name: '1栋', parentId: null }]);
+      prisma.user.create.mockResolvedValue({
+        ...ownerUser,
+        id: 'user_owner',
+        name: '新业主',
+        memberships: [{ projectId: project.id, preferredSpaceId: 'sp_bld_1', project }],
+      });
+
+      const created = await service.create({
+        scope: 'users',
+        projectId: project.id,
+        name: '新业主',
+        spaceId: 'sp_bld_1',
+      });
+
+      expect(prisma.space.findUnique).toHaveBeenCalledWith({ where: { id: 'sp_bld_1' } });
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            memberships: { create: { projectId: project.id, preferredSpaceId: 'sp_bld_1' } },
+          }),
+        }),
+      );
+      expect(created).toMatchObject({
+        spaceId: 'sp_bld_1',
+        spaceLabel: '1栋',
+        spacePath: '1栋',
+      });
+    });
+
+    it('scope=users：spaceId 不存在或跨项目时 400 且不写入', async () => {
+      prisma.project.findUnique.mockResolvedValue(project);
+      prisma.space.findUnique.mockResolvedValue(null);
+      await expect(
+        service.create({ scope: 'users', projectId: project.id, name: '新业主', spaceId: 'missing' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.user.create).not.toHaveBeenCalled();
+
+      prisma.space.findUnique.mockResolvedValue({
+        id: 'sp_yunqi',
+        projectId: 'prj_yunqi',
+        name: 'A座',
+        parentId: null,
+      });
+      await expect(
+        service.create({ scope: 'users', projectId: project.id, name: '新业主', spaceId: 'sp_yunqi' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.user.create).not.toHaveBeenCalled();
+    });
+
+    it('staff 忽略 spaceId，不校验、不写入 preferredSpaceId', async () => {
+      prisma.project.findUnique.mockResolvedValue(project);
+      prisma.user.create.mockResolvedValue({
+        ...staffUser,
+        id: 'user_new',
+        name: '新员工',
+        roles: [],
+        teamMembers: [],
+      });
+
+      await service.create({
+        projectId: project.id,
+        name: '新员工',
+        spaceId: 'sp_bld_1',
+      });
+
+      expect(prisma.space.findUnique).not.toHaveBeenCalled();
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            memberships: { create: { projectId: project.id } },
+          }),
+        }),
+      );
     });
 
     it('默认 staff 拒绝业主 identity', async () => {
@@ -304,10 +419,67 @@ describe('PeopleService', () => {
 
       const updated = await service.update('linyue', { name: '林悦改' });
       expect(updated.name).toBe('林悦改');
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: { name: '林悦改' },
+        }),
+      );
 
       await expect(service.update('linyue', { identity: '员工' })).rejects.toBeInstanceOf(
         BadRequestException,
       );
+    });
+
+    it('users PUT 可改/清空 spaceId；省略则不改', async () => {
+      prisma.user.findUnique.mockResolvedValue(ownerUser);
+      prisma.space.findUnique.mockResolvedValue({
+        id: 'sp_bld_2',
+        projectId: project.id,
+        name: '2栋',
+        parentId: null,
+      });
+      prisma.space.findMany.mockResolvedValue([
+        { id: 'sp_bld_1', name: '1栋', parentId: null },
+        { id: 'sp_bld_2', name: '2栋', parentId: null },
+      ]);
+      prisma.user.update.mockResolvedValue({
+        ...ownerUser,
+        memberships: [{ projectId: project.id, preferredSpaceId: 'sp_bld_2', project }],
+      });
+
+      const changed = await service.update('linyue', { spaceId: 'sp_bld_2' });
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            memberships: {
+              update: {
+                where: { projectId_userId: { projectId: project.id, userId: 'linyue' } },
+                data: { preferredSpaceId: 'sp_bld_2' },
+              },
+            },
+          }),
+        }),
+      );
+      expect(changed).toMatchObject({ spaceId: 'sp_bld_2', spaceLabel: '2栋', spacePath: '2栋' });
+
+      prisma.user.update.mockResolvedValue({
+        ...ownerUser,
+        memberships: [{ projectId: project.id, preferredSpaceId: null, project }],
+      });
+      const cleared = await service.update('linyue', { spaceId: null });
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            memberships: {
+              update: {
+                where: { projectId_userId: { projectId: project.id, userId: 'linyue' } },
+                data: { preferredSpaceId: null },
+              },
+            },
+          }),
+        }),
+      );
+      expect(cleared).toMatchObject({ spaceId: null, spaceLabel: null, spacePath: null });
     });
 
     it('拒绝把 staff identity 改成业主', async () => {

@@ -155,6 +155,8 @@ describe('People Import API (e2e)', () => {
           identity: '租户',
           status: '停用',
           spaceLabel: null,
+          spaceId: null,
+          spacePath: null,
           projectId,
         }),
       );
