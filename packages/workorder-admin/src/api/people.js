@@ -11,7 +11,7 @@
  *
  * U4：仅 scope=users 写 spaceId：合法 id 绑定；显式 null 清空；省略字段不改。
  * 读 spaceId + spaceLabel + spacePath；未绑 null → —。关系状态/来源只读可 null。
- * 列表/弹窗回显优先 spaceLabel（后端已路径优先），缺则兼容 spacePath。
+ * 列表回显优先 spacePath，无则 spaceLabel。清空 PUT 显式 spaceId: null；省略不改。
  * space 须属当前 projectId，否则后端 400。
  */
 
@@ -183,7 +183,7 @@ export function applyPeopleClientFilter(list, { scope, keyword, identity } = {})
       const phone = String(p.values?.phone || p.subtitle || '').toLowerCase()
       if (scopeKey === PEOPLE_SCOPE_USERS) {
         const space = String(
-          p.values?.spaceLabel || p.values?.spacePath || p.values?.space || '',
+          p.values?.spacePath || p.values?.spaceLabel || p.values?.space || '',
         ).toLowerCase()
         return name.includes(q) || phone.includes(q) || space.includes(q)
       }
@@ -223,12 +223,12 @@ export async function listPeople({ projectId, scope, status, q, identity } = {})
   return { items, source: 'api' }
 }
 
-/** 列表/详情常用空间：优先 spaceLabel（已是路径），缺则 spacePath；空为 —。 */
+/** 列表/详情常用空间：优先 spacePath，无则 spaceLabel；空为 —。 */
 export function preferredSpaceDisplay(values) {
-  const label = values?.spaceLabel
-  if (label != null && String(label).trim()) return String(label).trim()
   const path = values?.spacePath
   if (path != null && String(path).trim()) return String(path).trim()
+  const label = values?.spaceLabel
+  if (label != null && String(label).trim()) return String(label).trim()
   return '—'
 }
 

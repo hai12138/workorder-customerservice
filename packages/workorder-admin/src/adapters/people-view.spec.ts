@@ -49,7 +49,7 @@ const mixed = [
     identity: '租户',
     status: '有效',
     spaceId: 'spc_101',
-    spaceLabel: 'A栋/1层/101',
+    spaceLabel: '101',
     spacePath: 'A栋/1层/101',
     relationStatus: null,
     relationSource: null,

@@ -203,20 +203,19 @@ describe('people U2 helpers', () => {
       identity: '业主',
       status: '有效',
       spaceId: 'spc_101',
-      spaceLabel: 'A栋/1层/101',
+      spaceLabel: '101',
       spacePath: 'A栋/1层/101',
       relationStatus: null,
       relationSource: null,
       updatedAt: null,
     })
     expect(user.values.spaceId).toBe('spc_101')
-    expect(user.values.spaceLabel).toBe('A栋/1层/101')
+    expect(user.values.spaceLabel).toBe('101')
     expect(user.values.spacePath).toBe('A栋/1层/101')
     expect(preferredSpaceDisplay(user.values)).toBe('A栋/1层/101')
-    expect(preferredSpaceDisplay({ spaceLabel: 'A栋/1层/101', spacePath: 'A栋/1层/101' })).toBe('A栋/1层/101')
-    expect(preferredSpaceDisplay({ spaceLabel: 'A栋/1层/101', spacePath: 'ignored' })).toBe('A栋/1层/101')
-    expect(preferredSpaceDisplay({ spaceLabel: null, spacePath: 'A栋/1层/101' })).toBe('A栋/1层/101')
+    expect(preferredSpaceDisplay({ spaceLabel: '101', spacePath: 'A栋/1层/101' })).toBe('A栋/1层/101')
     expect(preferredSpaceDisplay({ spaceLabel: 'A栋-1-101' })).toBe('A栋-1-101')
+    expect(preferredSpaceDisplay({ spaceLabel: null, spacePath: 'A栋/1层/101' })).toBe('A栋/1层/101')
     expect(preferredSpaceDisplay({ spaceId: null, spaceLabel: null, spacePath: null })).toBe('—')
     expect(user.values.relationStatus).toBeNull()
     expect(user.values.relationSource).toBeNull()
