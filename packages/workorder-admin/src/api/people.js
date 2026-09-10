@@ -5,10 +5,13 @@
  * users identity：业主|租户|家属|类型未设置
  * 员工角色展示文案：项目管理员|物业客服|物管人员（双向映射）
  * bootstrap records('people') 仅 GET 失败兜底。
+ *
+ * U3：GET /people/template?scope= 下载 xlsx；POST /people/import multipart
+ * 字段 file + projectId + scope（scope 在 form body，不是 query）。
  */
 
 import { api, ApiError } from './http.js'
-import { getProjectId } from '../store/session.js'
+import { getProjectId, getToken } from '../store/session.js'
 
 export const PEOPLE_SCOPE_STAFF = 'staff'
 export const PEOPLE_SCOPE_USERS = 'users'
@@ -262,4 +265,115 @@ export async function updatePerson(id, patch = {}) {
     method: 'PUT',
     body: JSON.stringify(body),
   })
+}
+
+export const PEOPLE_IMPORT_PATH = '/people/import'
+
+export function resolvePeopleScope(scope) {
+  return scope === PEOPLE_SCOPE_USERS ? PEOPLE_SCOPE_USERS : PEOPLE_SCOPE_STAFF
+}
+
+/** GET /api/v1/people/template?scope=staff|users — scope 仅此接口走 query。 */
+export function buildPeopleTemplatePath(scope) {
+  const params = new URLSearchParams()
+  params.set('scope', resolvePeopleScope(scope))
+  return `/people/template?${params.toString()}`
+}
+
+export function formatPeopleImportErrors(errors) {
+  if (!Array.isArray(errors) || !errors.length) return ''
+  return errors
+    .map((e) => {
+      const row = e?.row != null ? e.row : '?'
+      const message = e?.message || '校验失败'
+      return `第 ${row} 行: ${message}`
+    })
+    .join('\n')
+}
+
+export function peopleImportSuccessCount(data) {
+  if (data == null || typeof data !== 'object') return 0
+  const n = data.imported ?? data.count ?? data.successCount
+  const num = Number(n)
+  return Number.isFinite(num) ? num : 0
+}
+
+export function peopleIoApiMessage(err, actionLabel) {
+  if (err?.status === 404) return `${actionLabel}接口未就绪`
+  return err?.message || `${actionLabel}失败`
+}
+
+function authHeaders() {
+  const headers = {}
+  const token = getToken()
+  if (token) headers.Authorization = `Bearer ${token}`
+  return headers
+}
+
+function throwPeopleIoFailure(res, body, actionLabel) {
+  if (res.status === 404) {
+    throw new ApiError(`${actionLabel}接口未就绪`, 404, body?.code)
+  }
+  const errors = body?.data?.errors || body?.errors
+  const base = body?.message || `${actionLabel}失败 ${res.status}`
+  if (Array.isArray(errors) && errors.length) {
+    const err = new ApiError(`${base}\n\n${formatPeopleImportErrors(errors)}`, res.status, body?.code)
+    err.errors = errors
+    throw err
+  }
+  throw new ApiError(base, res.status, body?.code)
+}
+
+export async function downloadPeopleTemplate({ scope } = {}) {
+  const path = buildPeopleTemplatePath(scope)
+  let res
+  try {
+    res = await fetch(`/api/v1${path}`, { headers: authHeaders() })
+  } catch {
+    throw new ApiError('无法连接后端服务，请确认 API 已启动（pnpm dev:api）', 0)
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throwPeopleIoFailure(res, body, '下载模板')
+  }
+  const blob = await res.blob()
+  const filename =
+    resolvePeopleScope(scope) === PEOPLE_SCOPE_USERS
+      ? 'people_users_template.xlsx'
+      : 'people_staff_template.xlsx'
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+/** POST /api/v1/people/import — multipart file + projectId + scope，无 query。 */
+export async function importPeople(file, { scope, projectId } = {}) {
+  const pid = projectId || getProjectId()
+  if (!pid) throw new ApiError('项目ID不能为空', 400)
+  if (!file) throw new ApiError('未选择文件', 400)
+
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('projectId', pid)
+  formData.append('scope', resolvePeopleScope(scope))
+
+  let res
+  try {
+    res = await fetch(`/api/v1${PEOPLE_IMPORT_PATH}`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: formData,
+    })
+  } catch {
+    throw new ApiError('无法连接后端服务，请确认 API 已启动（pnpm dev:api）', 0)
+  }
+
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok || (body.code !== undefined && body.code !== 0)) {
+    throwPeopleIoFailure(res, body, '人员导入')
+  }
+  return body.data !== undefined ? body.data : body
 }

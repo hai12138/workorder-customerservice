@@ -349,8 +349,8 @@ export function peopleView() {
       '用户与员工管理',
       'WEB-03',
       '维护项目用户资料与员工账号',
-      btn('下载模板', 'people-u3-toast') +
-        btn(importLabel, 'people-u3-toast') +
+      `<button class="btn" data-action="download-people-template" data-scope="${scope}">下载模板</button>` +
+        `<button class="btn" data-action="import-people" data-scope="${scope}">${importLabel}</button>` +
         `<button class="btn primary" data-action="new-person">${createLabel}</button>`,
     ) +
     `<div class="tabs"><button class="tab-btn${!isStaff ? ' on' : ''}" data-action="people-tab" data-tab="projectUsers">项目用户</button><button class="tab-btn${isStaff ? ' on' : ''}" data-action="people-tab" data-tab="staff">员工账号</button></div>` +

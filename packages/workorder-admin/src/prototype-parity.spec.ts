@@ -53,7 +53,11 @@ describe('approved prototype UI contract', () => {
       'binding-detail', 'delivery-detail', 'publish-agent-capability',
       'mcp-tool-detail', 'run-agent-demo', 'confirm-agent-submit',
       'agent-log-detail',
+      'download-space-template', 'import-spaces', 'confirm-import-spaces',
+      'download-people-template', 'import-people', 'confirm-import-people',
     ].forEach((action) => expect(source).toContain(`'${action}'`))
+    expect(source).not.toContain('people-u3-toast')
+    expect(source).not.toContain('导入/模板下一切片 U3')
   })
 
   it('keeps real login gate as the frontend entry', () => {
