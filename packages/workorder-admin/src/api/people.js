@@ -138,7 +138,7 @@ export function toPersonRecord(item) {
       teamName: pick(item, 'teamName'),
       roleName: pick(item, 'roleName'),
       onlineStatus: pick(item, 'onlineStatus'),
-      spaceLabel: pick(item, 'spaceLabel', 'space'),
+      spaceLabel: pick(item, 'spaceLabel'),
       relationStatus: pick(item, 'relationStatus'),
       relationSource: pick(item, 'relationSource'),
       updatedAt: pick(item, 'updatedAt'),
