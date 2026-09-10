@@ -2,7 +2,7 @@ import shell from './prototype-shell.html?raw'
 import * as P from './adapters/pages.js'
 import { badge } from './adapters/ui.js'
 import { clearSession, getSession, setProjectId } from './store/session.js'
-import { loadBootstrap, refresh, records, getSnapshot, setFilteredProjects, clearFilteredProjects, setProjectsFilterState, clearProjectsFilterState, setSpacesCache, getSpacesCache, setSelectedSpaceId, clearSelectedSpaceId, setSpacesFilterState, clearSpacesFilterState, setPeopleTab, getPeopleFilterState, setPeopleFilterState, clearPeopleFilterState, getPeopleListCache, setPeopleListCache, clearPeopleListCache } from './store/app-state.js'
+import { loadBootstrap, refresh, records, getSnapshot, setFilteredProjects, clearFilteredProjects, setProjectsFilterState, clearProjectsFilterState, setSpacesCache, getSpacesCache, setSelectedSpaceId, clearSelectedSpaceId, setSpacesFilterState, clearSpacesFilterState, setPeopleTab, getPeopleTab, getPeopleFilterState, setPeopleFilterState, clearPeopleFilterState, getPeopleListCache, setPeopleListCache, clearPeopleListCache } from './store/app-state.js'
 import {
   createRecord,
   publishConfig,
@@ -22,14 +22,22 @@ import {
   importSpaces,
 } from './api/workbench.js'
 import {
-  STAFF_IDENTITIES,
   DEFAULT_STAFF_IDENTITY,
-  EXCLUDED_IDENTITIES,
-  toPersonRecord,
-  listPeople,
+  DEFAULT_USER_IDENTITY,
+  STAFF_ROLE_LABELS,
+  USER_IDENTITIES,
+  applyPeopleClientFilter,
   createPerson,
-  updatePerson,
+  dash,
+  generateEmployeeNo,
+  isProjectUserIdentity,
+  isValidPhone,
+  listPeople,
   personApiMessage,
+  scopeFromTab,
+  staffRoleLabel,
+  toPersonRecord,
+  updatePerson,
 } from './api/people.js'
 import { notifyApi } from './api/notify.js'
 import { agentApi } from './api/agent.js'
@@ -249,55 +257,58 @@ function findPerson(id) {
   return rec ? toPersonRecord(rec) : null
 }
 
-function applyPeopleKeywordStatus(list, filterState) {
-  let filtered = list
-  if (filterState.status && filterState.status !== '全部') {
-    filtered = filtered.filter((p) => String(p.status) === filterState.status)
-  }
-  if (filterState.keyword) {
-    const q = filterState.keyword.toLowerCase()
-    filtered = filtered.filter((p) => {
-      const name = String(p.title || p.values?.name || '').toLowerCase()
-      const phone = String(p.subtitle || p.values?.phone || '').toLowerCase()
-      return name.includes(q) || phone.includes(q)
-    })
-  }
-  return filtered
-}
-
 async function loadPeopleList({ silent = false } = {}) {
+  const tab = getPeopleTab()
+  const scope = scopeFromTab(tab)
   const filter = getPeopleFilterState()
   try {
-    const result = await listPeople({ q: filter.keyword, status: filter.status })
+    const result = await listPeople({
+      scope,
+      q: filter.keyword,
+      identity: filter.identity,
+    })
     setPeopleListCache({ items: result.items, source: 'api', error: null })
     return result
   } catch (e) {
-    const fallback = applyPeopleKeywordStatus(
-      records('people')
-        .map(toPersonRecord)
-        .filter((p) => p && !EXCLUDED_IDENTITIES.includes(String(p.values?.identity || ''))),
-      filter,
+    const fallback = applyPeopleClientFilter(
+      records('people').map(toPersonRecord).filter(Boolean),
+      { scope, keyword: filter.keyword, identity: filter.identity },
     )
     setPeopleListCache({ items: fallback, source: 'bootstrap', error: e })
-    if (!silent) toast(personApiMessage(e, '员工列表 GET'))
+    if (!silent) toast(personApiMessage(e, '人员列表 GET'))
     return null
   }
 }
 
-function personForm(rec) {
+function personForm(rec, scope) {
   const name = rec?.title || rec?.values?.name || ''
-  const phone = rec?.values?.phone || (rec?.subtitle && rec.subtitle !== rec?.values?.identity ? rec.subtitle : '') || ''
-  const currentIdentity = rec?.values?.identity || DEFAULT_STAFF_IDENTITY
-  const identities = [...STAFF_IDENTITIES]
-  if (currentIdentity && !identities.includes(currentIdentity) && currentIdentity !== '—') identities.push(currentIdentity)
-  const selected = identities.includes(currentIdentity) ? currentIdentity : DEFAULT_STAFF_IDENTITY
-  const identityOpts = identities
-    .map((i) => `<option${i === selected ? ' selected' : ''}>${esc(i)}</option>`)
-    .join('')
+  const phone = rec?.values?.phone || ''
+  if (scope === 'users') {
+    const current = USER_IDENTITIES.includes(rec?.values?.identity)
+      ? rec.values.identity
+      : DEFAULT_USER_IDENTITY
+    const opts = USER_IDENTITIES.map(
+      (i) => `<option${i === current ? ' selected' : ''}>${esc(i)}</option>`,
+    ).join('')
+    return `<div class="form-grid">
+      <div class="form-row"><label>* 姓名</label><input id="f-name" value="${esc(name)}" placeholder="请输入姓名"></div>
+      <div class="form-row"><label>* 手机号</label><input id="f-phone" value="${esc(phone)}" placeholder="11 位手机号" maxlength="11"></div>
+      <div class="form-row"><label>项目用户类型</label><select id="f-identity">${opts}</select></div>
+      <div class="form-row"><label>常用空间</label><input id="f-space" value="${esc(rec?.values?.spaceLabel || '')}" placeholder="可选"></div>
+    </div>`
+  }
+  const currentLabel = staffRoleLabel(rec?.values?.identity) || DEFAULT_STAFF_IDENTITY
+  const selected = STAFF_ROLE_LABELS.includes(currentLabel) ? currentLabel : DEFAULT_STAFF_IDENTITY
+  const opts = STAFF_ROLE_LABELS.map(
+    (i) => `<option${i === selected ? ' selected' : ''}>${esc(i)}</option>`,
+  ).join('')
+  const employeeNo = rec?.values?.employeeNo || (rec?.id ? '' : generateEmployeeNo())
   return `<div class="form-grid">
-    <div class="form-row"><label>姓名</label><input id="f-name" value="${esc(name)}" placeholder="请输入姓名"></div>
-    <div class="form-row"><label>手机号</label><input id="f-phone" value="${esc(phone)}" placeholder="可选"></div>
-    <div class="form-row"><label>身份</label><select id="f-identity">${identityOpts}</select></div>
+    <div class="form-row"><label>* 姓名</label><input id="f-name" value="${esc(name)}" placeholder="请输入姓名"></div>
+    <div class="form-row"><label>* 手机号</label><input id="f-phone" value="${esc(phone)}" placeholder="11 位手机号" maxlength="11"></div>
+    <div class="form-row"><label>员工编号</label><input id="f-employee-no" value="${esc(employeeNo)}" readonly placeholder="保存后由后端返回"></div>
+    <div class="form-row"><label>* 部门/班组</label><input id="f-team" value="${esc(rec?.values?.teamName || '')}" placeholder="请输入部门/班组"></div>
+    <div class="form-row"><label>项目角色</label><select id="f-identity">${opts}</select></div>
   </div>`
 }
 
@@ -1024,11 +1035,11 @@ async function handleAction(act, a) {
         toast('筛选条件已应用')
       } else if (current === 'people') {
         const keyword = document.getElementById('keyword')?.value?.trim() || ''
-        const status = document.getElementById('people-status-select')?.value || '全部'
-        setPeopleFilterState(keyword, status)
+        const identity = document.getElementById('people-identity-select')?.value || ''
+        setPeopleFilterState(keyword, identity)
         const result = await loadPeopleList()
         render()
-        if (result) toast(`已加载 ${result.items.length} 位`)
+        if (result) toast(`已加载 ${applyPeopleClientFilter(result.items, { scope: scopeFromTab(getPeopleTab()), keyword, identity }).length} 位`)
       } else {
         toast('筛选条件已应用')
       }
@@ -1411,63 +1422,99 @@ async function handleAction(act, a) {
       render()
       return
     }
+    if (act === 'people-u3-toast') {
+      toast('导入/模板下一切片 U3')
+      return
+    }
     if (act === 'people-tab') {
-      setPeopleTab(a.dataset.tab === 'staff' ? 'staff' : 'all')
+      setPeopleTab(a.dataset.tab === 'staff' ? 'staff' : 'projectUsers')
+      clearPeopleListCache()
+      await loadPeopleList({ silent: true })
       render()
       return
     }
     if (act === 'new-person') {
+      const scope = scopeFromTab(getPeopleTab())
       modal(
-        '新增项目用户',
-        personForm(null),
-        `<button class="btn" data-action="close">取消</button><button class="btn primary" data-action="save-person">保存</button>`,
+        scope === 'staff' ? '新增员工' : '新增项目用户',
+        personForm(null, scope),
+        `<button class="btn" data-action="close">取消</button><button class="btn primary" data-action="save-person" data-scope="${scope}">保存</button>`,
       )
       return
     }
     if (act === 'person-edit') {
       const rec = findPerson(a.dataset.id)
       if (!rec) return toast('未找到人员')
+      const scope = isProjectUserIdentity(rec.values?.identity) ? 'users' : 'staff'
       modal(
-        '编辑人员',
-        personForm(rec),
-        `<button class="btn" data-action="close">取消</button><button class="btn primary" data-action="save-person" data-id="${esc(rec.id)}">保存</button>`,
+        scope === 'staff' ? '编辑员工' : '编辑项目用户',
+        personForm(rec, scope),
+        `<button class="btn" data-action="close">取消</button><button class="btn primary" data-action="save-person" data-id="${esc(rec.id)}" data-scope="${scope}">保存</button>`,
       )
       return
     }
     if (act === 'person-detail') {
       const rec = findPerson(a.dataset.id)
       if (!rec) return toast('未找到人员')
+      const isUser = isProjectUserIdentity(rec.values?.identity)
+      const fields = isUser
+        ? `
+          <div><span>姓名</span><b>${esc(dash(rec.title))}</b></div>
+          <div><span>手机号</span><b>${esc(dash(rec.values?.phone))}</b></div>
+          <div><span>项目用户类型</span><b>${esc(dash(rec.values?.identity))}</b></div>
+          <div><span>常用空间</span><b>${esc(dash(rec.values?.spaceLabel))}</b></div>
+          <div><span>项目关系状态</span><b>${esc(dash(rec.values?.relationStatus))}</b></div>
+          <div><span>关系来源</span><b>${esc(dash(rec.values?.relationSource))}</b></div>
+          <div><span>更新时间</span><b>${esc(dash(rec.values?.updatedAt))}</b></div>`
+        : `
+          <div><span>姓名</span><b>${esc(dash(rec.title))}</b></div>
+          <div><span>手机号</span><b>${esc(dash(rec.values?.phone))}</b></div>
+          <div><span>员工编号</span><b>${esc(dash(rec.values?.employeeNo))}</b></div>
+          <div><span>部门/班组</span><b>${esc(dash(rec.values?.teamName))}</b></div>
+          <div><span>当前项目角色</span><b>${esc(dash(rec.values?.roleName || staffRoleLabel(rec.values?.identity)))}</b></div>
+          <div><span>在线状态</span><b>${esc(dash(rec.values?.onlineStatus))}</b></div>
+          <div><span>更新时间</span><b>${esc(dash(rec.values?.updatedAt))}</b></div>`
       drawer(
-        `${esc(rec.title)} · 人员详情`,
+        `${esc(rec.title)} · ${isUser ? '项目用户' : '员工'}详情`,
         `<div class="actions">${badge(rec.status, String(rec.status).includes('停') ? 'neutral' : 'ok')}<span class="muted">${esc(rec.id)}</span></div>
-        <div class="kv" style="margin-top:15px">
-          <div><span>姓名</span><b>${esc(rec.title)}</b></div>
-          <div><span>手机号</span><b>${esc(rec.values?.phone || rec.subtitle || '—')}</b></div>
-          <div><span>身份</span><b>${esc(rec.values?.identity || '—')}</b></div>
-          <div><span>状态</span><b>${esc(rec.status)}</b></div>
-          <div><span>空间/班组</span><b>${esc(rec.values?.space || '—')}</b></div>
-          <div><span>项目</span><b>${esc(rec.values?.project || '—')}</b></div>
-          <div><span>渠道</span><b>${esc(rec.values?.channel || '—')}</b></div>
-        </div>`,
+        <div class="kv" style="margin-top:15px">${fields}</div>`,
       )
       return
     }
     if (act === 'save-person') {
+      const scope = a.dataset.scope === 'users' ? 'users' : 'staff'
       const name = document.getElementById('f-name')?.value?.trim()
       const phone = document.getElementById('f-phone')?.value?.trim() || ''
-      const identity = document.getElementById('f-identity')?.value?.trim() || DEFAULT_STAFF_IDENTITY
+      const identity =
+        document.getElementById('f-identity')?.value?.trim() ||
+        (scope === 'users' ? DEFAULT_USER_IDENTITY : DEFAULT_STAFF_IDENTITY)
       if (!name) return toast('请填写姓名')
+      if (!isValidPhone(phone)) return toast('请填写 11 位手机号')
       const id = a.dataset.id
       try {
-        if (id) {
-          await updatePerson(id, { name, phone, identity })
-          await afterWrite('人员信息已更新')
+        if (scope === 'users') {
+          const spaceLabel = document.getElementById('f-space')?.value?.trim() || ''
+          if (id) {
+            await updatePerson(id, { name, phone, identity, spaceLabel, scope })
+            await afterWrite('项目用户已更新')
+          } else {
+            await createPerson({ name, phone, identity, spaceLabel, scope })
+            await afterWrite('项目用户已创建')
+          }
         } else {
-          await createPerson({ name, phone, identity })
-          await afterWrite('人员已创建')
+          const teamName = document.getElementById('f-team')?.value?.trim() || ''
+          const employeeNo = document.getElementById('f-employee-no')?.value?.trim() || ''
+          if (!teamName) return toast('请填写部门/班组')
+          if (id) {
+            await updatePerson(id, { name, phone, identity, teamName, employeeNo, scope })
+            await afterWrite('员工信息已更新')
+          } else {
+            await createPerson({ name, phone, identity, teamName, employeeNo, scope })
+            await afterWrite('员工已创建')
+          }
         }
       } catch (e) {
-        toast(personApiMessage(e, id ? '编辑员工 PUT' : '新建员工 POST'))
+        toast(personApiMessage(e, id ? '编辑人员 PUT' : '新建人员 POST'))
       }
       return
     }
