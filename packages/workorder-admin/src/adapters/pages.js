@@ -14,6 +14,17 @@ import {
   STAFF_ROLE_FILTER_OPTIONS,
 } from '../api/people.js'
 import { badge, btn, head, filters, table, footer, esc, toneBadge } from './ui.js'
+import { DEFAULT_ROLE_ID, ROLE_PERM_GROUPS, ROLE_PERM_TOTAL, STATIC_ROLES } from '../data/roles-static.js'
+
+let selectedRoleId = DEFAULT_ROLE_ID
+
+export function getSelectedRoleId() {
+  return selectedRoleId
+}
+
+export function setSelectedRoleId(id) {
+  selectedRoleId = id || DEFAULT_ROLE_ID
+}
 
 function metricCards(items) {
   const tones = { ok: 'green', warning: 'gray', info: '', neutral: 'gray', danger: 'gray' }
@@ -362,35 +373,40 @@ export function peopleView() {
 }
 
 export function roles() {
-  const list = records('roles')
-  const selected = list[0]
-  const perms = [
-    '查看项目数据',
-    '查看本人任务',
-    '查看全部工单',
-    '派单',
-    '接单',
-    '提交处理记录',
-    '完成工单',
-    '转派',
-    'AI 助手代客报单',
-    '知识问询',
-    '工单配置',
-    '异常处理',
-  ]
-  const enabledCount = Number(selected?.values?.permissions ?? 0)
+  const list = STATIC_ROLES
+  const selected = list.find((r) => r.id === selectedRoleId) || list.find((r) => r.id === DEFAULT_ROLE_ID) || list[0]
+  const enabled = new Set(selected?.permissions || [])
+  const enabledCount = enabled.size
   const roleList = list
     .map(
-      (r, i) =>
-        `<div class="role ${i === 0 ? 'on' : ''}" data-action="select-role" data-id="${esc(r.id)}"><strong>${esc(r.title)}</strong><div class="muted">${esc(r.subtitle)} · ${esc(r.values?.scope)}</div></div>`,
+      (r) =>
+        `<div class="role ${r.id === selected?.id ? 'on' : ''}" data-action="select-role" data-id="${esc(r.id)}"><strong>${esc(r.title)}</strong><div class="muted">${esc(r.kind)} · ${esc(r.scope)}</div></div>`,
     )
     .join('')
-  const matrix = perms
-    .map((x, i) => `<div class="perm">${x}<span style="float:right" class="switch ${i < enabledCount ? 'on' : ''}"></span></div>`)
-    .join('')
+  const matrix = ROLE_PERM_GROUPS.map((g) => {
+    const items = g.items
+      .map((x) => {
+        const on = enabled.has(x)
+        const fixed = selected?.fixed ? '<span class="muted perm-fixed">固定</span>' : ''
+        return `<div class="perm">${esc(x)}<span class="perm-ctl">${fixed}<span class="switch ${on ? 'on' : ''}"></span></span></div>`
+      })
+      .join('')
+    return `<section class="perm-group"><h3>${esc(g.title)}</h3><div class="matrix">${items}</div></section>`
+  }).join('')
+  const headBadge = selected?.readonly
+    ? badge('只读', 'blue')
+    : `<button class="btn small" data-action="edit-role">编辑权限</button>`
+  const note = selected?.readonlyNote
+    ? `<p class="card-note">${esc(selected.readonlyNote)}</p>`
+    : ''
   return (
-    head('角色权限', 'WEB-04', '维护角色功能权限矩阵、数据范围与授权', `<button class="btn primary" data-action="new-role">＋ 新建自定义角色</button>`) +
-    `<div class="role-layout"><div class="role-list">${roleList || '<p class="muted">暂无角色</p>'}</div><div class="card"><div class="actions"><h2 style="margin-right:auto">${esc(selected?.title || '角色')} · 功能权限</h2>${badge('只读', 'blue')}</div><p class="card-note">数据来自后端角色列表；开关保存将在后续迭代开放写入。</p><div class="matrix">${matrix}</div><div class="health" style="margin-top:15px"><b>范围与影响</b><p>项目数据范围：${esc(selected?.values?.scope || '—')}　·　授权人数：${esc(selected?.values?.members ?? 0)} 人　·　已开启权限：${enabledCount} / ${perms.length}</p></div></div></div>`
+    head(
+      '角色权限',
+      'WEB-04',
+      '维护角色功能权限矩阵、数据范围与授权',
+      `<button class="btn is-disabled" data-action="new-role">＋ 新建自定义角色</button>`,
+    ) +
+    `<div class="role-layout"><div class="role-list">${roleList}</div><div class="card role-matrix"><div class="actions"><h2 style="margin-right:auto">${esc(selected?.title || '角色')} · 功能权限</h2>${headBadge}</div>${note}${matrix}</div><aside class="card role-impact"><h2>范围与影响</h2><dl><div><dt>项目数据范围</dt><dd>${esc(selected?.scope || '—')}</dd></div><div><dt>授权人数</dt><dd>${esc(selected?.members ?? 0)} 人</dd></div><div><dt>已开启权限</dt><dd>${enabledCount} / ${ROLE_PERM_TOTAL}</dd></div></dl></aside></div>`
   )
 }
 
