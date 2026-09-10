@@ -1,8 +1,10 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import * as XLSX from 'xlsx';
 import { vi } from 'vitest';
 import { PeopleService } from './people.service';
 import {
   EMPLOYEE_IDENTITIES,
+  importHeadersForScope,
   isEmployeeIdentity,
   isUserIdentity,
   USER_IDENTITIES,
@@ -20,6 +22,7 @@ describe('PeopleService', () => {
       create: ReturnType<typeof vi.fn>;
       update: ReturnType<typeof vi.fn>;
     };
+    $transaction: ReturnType<typeof vi.fn>;
   };
 
   const project = { id: 'prj_xinglan', name: '星澜花园' };
@@ -58,9 +61,19 @@ describe('PeopleService', () => {
         create: vi.fn(),
         update: vi.fn(),
       },
+      $transaction: vi.fn(),
     };
+    prisma.$transaction.mockImplementation(async (fn: (tx: typeof prisma) => Promise<unknown>) => fn(prisma));
     service = new PeopleService(prisma as never);
   });
+
+  function excelFile(rows: unknown[][]): Express.Multer.File {
+    const worksheet = XLSX.utils.aoa_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'People');
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+    return { buffer } as Express.Multer.File;
+  }
 
   describe('identity口径', () => {
     it('staff 含管理员/物管人员/员工，users 含业主/租户/家属/类型未设置', () => {
@@ -302,6 +315,99 @@ describe('PeopleService', () => {
       await expect(service.update('zhaoqing', { identity: '业主' })).rejects.toBeInstanceOf(
         BadRequestException,
       );
+    });
+  });
+
+  describe('template / import', () => {
+    it('staff 模板列为姓名/手机/身份/状态', async () => {
+      const buffer = await service.generateTemplate('staff');
+      const sheet = XLSX.read(buffer, { type: 'buffer' }).Sheets.Staff;
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as string[][];
+      expect(rows[1]).toEqual([...importHeadersForScope('staff')]);
+      expect(rows[1]).toEqual(['姓名', '手机', '身份', '状态']);
+    });
+
+    it('users 模板列为姓名/手机/类型/状态', async () => {
+      const buffer = await service.generateTemplate('users');
+      const sheet = XLSX.read(buffer, { type: 'buffer' }).Sheets.Users;
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as string[][];
+      expect(rows[1]).toEqual(['姓名', '手机', '类型', '状态']);
+    });
+
+    it('staff 导入默认 identity=物管人员、status=有效，并写 User + ProjectMember', async () => {
+      prisma.project.findUnique.mockResolvedValue(project);
+      prisma.user.create.mockResolvedValue({ id: 'user_imp' });
+
+      const result = await service.importPeople(
+        excelFile([
+          ['姓名', '手机', '身份', '状态'],
+          ['导入员工', '13900006666', '', ''],
+        ]),
+        project.id,
+        'staff',
+      );
+
+      expect(result).toEqual({ success: true, imported: 1 });
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            name: '导入员工',
+            phone: '13900006666',
+            identity: '物管人员',
+            status: '有效',
+            memberships: { create: { projectId: project.id } },
+          }),
+        }),
+      );
+    });
+
+    it('users 导入默认 identity=业主，并写 ProjectMember', async () => {
+      prisma.project.findUnique.mockResolvedValue(project);
+      prisma.user.create.mockResolvedValue({ id: 'user_owner_imp' });
+
+      const result = await service.importPeople(
+        excelFile([
+          ['姓名', '手机', '类型', '状态'],
+          ['导入业主', '13900007777', '', ''],
+        ]),
+        project.id,
+        'users',
+      );
+
+      expect(result.imported).toBe(1);
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            identity: '业主',
+            status: '有效',
+            memberships: { create: { projectId: project.id } },
+          }),
+        }),
+      );
+    });
+
+    it('跨 scope identity 整单失败且不写入', async () => {
+      prisma.project.findUnique.mockResolvedValue(project);
+
+      await expect(
+        service.importPeople(
+          excelFile([
+            ['姓名', '手机', '身份', '状态'],
+            ['合法员工', '13900008888', '员工', '有效'],
+            ['假业主', '13900009999', '业主', '有效'],
+          ]),
+          project.id,
+          'staff',
+        ),
+      ).rejects.toMatchObject({
+        response: {
+          message: '数据验证失败',
+          errors: [{ row: 3, message: expect.stringContaining('staff') }],
+        },
+      });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.user.create).not.toHaveBeenCalled();
     });
   });
 });

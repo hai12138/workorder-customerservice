@@ -1,14 +1,25 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import * as XLSX from 'xlsx';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreatePersonDto } from './dto/create-person.dto';
+import { ImportError, ImportResult } from './dto/import-people.dto';
 import { QueryPeopleDto } from './dto/query-people.dto';
 import { UpdatePersonDto } from './dto/update-person.dto';
 import {
   DEFAULT_PEOPLE_SCOPE,
   defaultIdentityForScope,
   identitiesForScope,
+  importHeadersForScope,
+  importIdentityHeaderForScope,
+  isPeopleScope,
+  isUserStatus,
+  PEOPLE_IMPORT_NAME_HEADER,
+  PEOPLE_IMPORT_PHONE_HEADER,
+  PEOPLE_IMPORT_STATUS_HEADER,
   scopeOfIdentity,
   USER_STATUS_ACTIVE,
+  USER_STATUSES,
+  type PeopleIdentity,
   type PeopleScope,
   type UserStatusValue,
 } from './people.constants';
@@ -151,6 +162,188 @@ export class PeopleService {
 
   async setStatus(id: string, status: UserStatusValue): Promise<PersonRecord> {
     return this.update(id, { status });
+  }
+
+  async generateTemplate(scope: PeopleScope): Promise<Buffer> {
+    this.requireScope(scope);
+    const identities = identitiesForScope(scope);
+    const defaultIdentity = defaultIdentityForScope(scope);
+    const instructionRow = [
+      '必填：姓名',
+      '可选：手机',
+      `可选：${identities.join('|')}（默认${defaultIdentity}）`,
+      '可选：有效|停用（默认有效）',
+    ];
+    const headers = [...importHeadersForScope(scope)];
+    const exampleRows =
+      scope === 'staff'
+        ? [
+            ['张三', '13800000001', '物管人员', '有效'],
+            ['李四', '13800000002', '管理员', '有效'],
+            ['王五', '13800000003', '员工', '停用'],
+          ]
+        : [
+            ['林悦', '13800000011', '业主', '有效'],
+            ['赵六', '13800000012', '租户', '有效'],
+            ['钱七', '13800000013', '家属', '有效'],
+            ['孙八', '13800000014', '类型未设置', '停用'],
+          ];
+
+    const worksheet = XLSX.utils.aoa_to_sheet([instructionRow, headers, ...exampleRows]);
+    worksheet['!cols'] = [{ wch: 18 }, { wch: 16 }, { wch: 42 }, { wch: 22 }];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, scope === 'staff' ? 'Staff' : 'Users');
+    return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+  }
+
+  async importPeople(file: Express.Multer.File, projectId: string, scope: PeopleScope): Promise<ImportResult> {
+    this.requireScope(scope);
+    if (!file) {
+      throw new BadRequestException('未上传文件');
+    }
+    await this.requireProject(projectId);
+
+    let workbook: XLSX.WorkBook;
+    try {
+      workbook = XLSX.read(file.buffer, { type: 'buffer' });
+    } catch {
+      throw new BadRequestException('无效的文件格式');
+    }
+
+    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows: unknown[][] = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+    if (rows.length === 0) {
+      throw new BadRequestException('文件为空');
+    }
+
+    let headerRowIndex = 0;
+    let dataStartIndex = 1;
+    const firstCell = rows[0]?.[0] != null ? String(rows[0][0]) : '';
+    if (firstCell.includes('必填') || firstCell.includes('可选')) {
+      headerRowIndex = 1;
+      dataStartIndex = 2;
+    }
+    if (rows.length <= headerRowIndex) {
+      throw new BadRequestException('文件格式错误：缺少表头行');
+    }
+
+    const headers = (rows[headerRowIndex] ?? []).map((h) => String(h ?? '').trim());
+    const requiredHeaders = importHeadersForScope(scope);
+    for (const header of requiredHeaders) {
+      if (!headers.includes(header)) {
+        throw new BadRequestException(`缺少必需列: ${header}`);
+      }
+    }
+
+    const headerIndexMap: Record<string, number> = {};
+    headers.forEach((header, index) => {
+      headerIndexMap[header] = index;
+    });
+
+    const identityHeader = importIdentityHeaderForScope(scope);
+    const allowedIdentities = identitiesForScope(scope);
+    const dataRows = rows
+      .slice(dataStartIndex)
+      .filter((row) => Array.isArray(row) && row.some((cell) => cell !== undefined && cell !== ''));
+
+    if (dataRows.length === 0) {
+      throw new BadRequestException('没有数据行');
+    }
+
+    const errors: ImportError[] = [];
+    const validRows: Array<{
+      name: string;
+      phone: string | null;
+      identity: PeopleIdentity;
+      status: UserStatusValue;
+    }> = [];
+
+    for (let i = 0; i < dataRows.length; i++) {
+      const row = dataRows[i];
+      const rowNumber = i + dataStartIndex + 1;
+      const name = this.cellText(row[headerIndexMap[PEOPLE_IMPORT_NAME_HEADER]]);
+      const phone = this.normalizePhone(this.cellText(row[headerIndexMap[PEOPLE_IMPORT_PHONE_HEADER]]));
+      const identityRaw = this.cellText(row[headerIndexMap[identityHeader]]);
+      const statusRaw = this.cellText(row[headerIndexMap[PEOPLE_IMPORT_STATUS_HEADER]]);
+
+      if (!name) {
+        errors.push({ row: rowNumber, field: PEOPLE_IMPORT_NAME_HEADER, message: '姓名不能为空' });
+        continue;
+      }
+
+      const identity = identityRaw || defaultIdentityForScope(scope);
+      if (!(allowedIdentities as readonly string[]).includes(identity)) {
+        errors.push({
+          row: rowNumber,
+          field: identityHeader,
+          message: `身份必须落在 ${scope} 范围：${allowedIdentities.join('、')}`,
+        });
+        continue;
+      }
+
+      const status = statusRaw || USER_STATUS_ACTIVE;
+      if (!isUserStatus(status)) {
+        errors.push({
+          row: rowNumber,
+          field: PEOPLE_IMPORT_STATUS_HEADER,
+          message: `无效的状态: ${statusRaw}，必须是以下之一: ${USER_STATUSES.join(', ')}`,
+        });
+        continue;
+      }
+
+      validRows.push({
+        name,
+        phone,
+        identity: identity as PeopleIdentity,
+        status,
+      });
+    }
+
+    if (errors.length > 0) {
+      throw new BadRequestException({
+        message: '数据验证失败',
+        errors,
+      });
+    }
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        for (const validRow of validRows) {
+          await tx.user.create({
+            data: {
+              id: this.newUserId(),
+              name: validRow.name,
+              phone: validRow.phone,
+              identity: validRow.identity,
+              status: validRow.status,
+              memberships: { create: { projectId } },
+            },
+          });
+        }
+      });
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException('导入失败: ' + (error as Error).message);
+    }
+
+    return {
+      success: true,
+      imported: validRows.length,
+    };
+  }
+
+  private requireScope(scope: string): asserts scope is PeopleScope {
+    if (!isPeopleScope(scope)) {
+      throw new BadRequestException('scope 必须是 staff 或 users');
+    }
+  }
+
+  private cellText(value: unknown): string {
+    if (value === undefined || value === null) return '';
+    return String(value).trim();
   }
 
   private async requireProject(projectId: string) {

@@ -49,3 +49,22 @@ export function scopeOfIdentity(identity: string): PeopleScope | null {
 export function isUserStatus(status: string): status is UserStatusValue {
   return (USER_STATUSES as readonly string[]).includes(status);
 }
+
+export const PEOPLE_IMPORT_NAME_HEADER = '姓名';
+export const PEOPLE_IMPORT_PHONE_HEADER = '手机';
+export const PEOPLE_IMPORT_STATUS_HEADER = '状态';
+export const STAFF_IMPORT_IDENTITY_HEADER = '身份';
+export const USER_IMPORT_IDENTITY_HEADER = '类型';
+
+export function importIdentityHeaderForScope(scope: PeopleScope): string {
+  return scope === 'staff' ? STAFF_IMPORT_IDENTITY_HEADER : USER_IMPORT_IDENTITY_HEADER;
+}
+
+export function importHeadersForScope(scope: PeopleScope): readonly string[] {
+  return [
+    PEOPLE_IMPORT_NAME_HEADER,
+    PEOPLE_IMPORT_PHONE_HEADER,
+    importIdentityHeaderForScope(scope),
+    PEOPLE_IMPORT_STATUS_HEADER,
+  ];
+}
