@@ -11,8 +11,11 @@ let projectsFilterState = { keyword: '', status: '', province: '', city: '', dis
 let spacesFilterState = { keyword: '', type: '全部', status: '全部' }
 let spacesCache = null
 let selectedSpaceId = null
-let peopleTab = 'all'
-let peopleFilterState = { keyword: '', status: '全部' }
+let peopleTab = 'projectUsers'
+let peopleFilterState = {
+  projectUsers: { keyword: '', identity: '全部类型' },
+  staff: { keyword: '', identity: '全部项目角色' },
+}
 let peopleListCache = null
 
 export function getSnapshot() {
@@ -116,19 +119,29 @@ export function getPeopleTab() {
 }
 
 export function setPeopleTab(tab) {
-  peopleTab = tab === 'staff' ? 'staff' : 'all'
+  peopleTab = tab === 'staff' ? 'staff' : 'projectUsers'
 }
 
-export function getPeopleFilterState() {
-  return peopleFilterState
+function peopleFilterKey(tab = peopleTab) {
+  return tab === 'staff' ? 'staff' : 'projectUsers'
 }
 
-export function setPeopleFilterState(keyword, status) {
-  peopleFilterState = { keyword: keyword || '', status: status || '全部' }
+export function getPeopleFilterState(tab = peopleTab) {
+  return peopleFilterState[peopleFilterKey(tab)]
 }
 
-export function clearPeopleFilterState() {
-  peopleFilterState = { keyword: '', status: '全部' }
+export function setPeopleFilterState(keyword, identity, tab = peopleTab) {
+  const key = peopleFilterKey(tab)
+  const fallback = key === 'staff' ? '全部项目角色' : '全部类型'
+  peopleFilterState[key] = { keyword: keyword || '', identity: identity || fallback }
+}
+
+export function clearPeopleFilterState(tab = peopleTab) {
+  const key = peopleFilterKey(tab)
+  peopleFilterState[key] = {
+    keyword: '',
+    identity: key === 'staff' ? '全部项目角色' : '全部类型',
+  }
 }
 
 export function getPeopleListCache() {
