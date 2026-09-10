@@ -334,14 +334,14 @@ describe('PeopleService', () => {
       expect(rows[1]).toEqual(['姓名', '手机', '类型', '状态']);
     });
 
-    it('staff 导入默认 identity=物管人员、status=有效，并写 User + ProjectMember', async () => {
+    it('staff 导入四列：身份=物管人员、空状态默认有效，并写 User + ProjectMember', async () => {
       prisma.project.findUnique.mockResolvedValue(project);
       prisma.user.create.mockResolvedValue({ id: 'user_imp' });
 
       const result = await service.importPeople(
         excelFile([
-          ['姓名', '手机', '身份', '状态'],
-          ['导入员工', '13900006666', '', ''],
+          ['姓名', '手机', '身份', '状态', '部门', '班组'],
+          ['导入员工', '13900006666', '物管人员', ''],
         ]),
         project.id,
         'staff',
@@ -362,14 +362,14 @@ describe('PeopleService', () => {
       );
     });
 
-    it('users 导入默认 identity=业主，并写 ProjectMember', async () => {
+    it('users 导入四列：类型=业主、空状态默认有效，并写 ProjectMember', async () => {
       prisma.project.findUnique.mockResolvedValue(project);
       prisma.user.create.mockResolvedValue({ id: 'user_owner_imp' });
 
       const result = await service.importPeople(
         excelFile([
           ['姓名', '手机', '类型', '状态'],
-          ['导入业主', '13900007777', '', ''],
+          ['导入业主', '13900007777', '业主', ''],
         ]),
         project.id,
         'users',
@@ -385,6 +385,32 @@ describe('PeopleService', () => {
           }),
         }),
       );
+    });
+
+    it('姓名/手机/身份为空时按行失败且不写入', async () => {
+      prisma.project.findUnique.mockResolvedValue(project);
+      await expect(
+        service.importPeople(
+          excelFile([
+            ['姓名', '手机', '身份', '状态'],
+            ['', '13900008881', '员工', '有效'],
+            ['有名无手机', '', '员工', '有效'],
+            ['有名无身份', '13900008882', '', '有效'],
+          ]),
+          project.id,
+          'staff',
+        ),
+      ).rejects.toMatchObject({
+        response: {
+          message: '数据验证失败',
+          errors: [
+            { row: 2, field: '姓名', message: '姓名不能为空' },
+            { row: 3, field: '手机', message: '手机不能为空' },
+            { row: 4, field: '身份', message: expect.stringContaining('不能为空') },
+          ],
+        },
+      });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
     it('跨 scope identity 整单失败且不写入', async () => {

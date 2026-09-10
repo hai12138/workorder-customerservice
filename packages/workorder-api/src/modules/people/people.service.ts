@@ -167,11 +167,11 @@ export class PeopleService {
   async generateTemplate(scope: PeopleScope): Promise<Buffer> {
     this.requireScope(scope);
     const identities = identitiesForScope(scope);
-    const defaultIdentity = defaultIdentityForScope(scope);
+    const identityHeader = importIdentityHeaderForScope(scope);
     const instructionRow = [
       '必填：姓名',
-      '可选：手机',
-      `可选：${identities.join('|')}（默认${defaultIdentity}）`,
+      '必填：手机',
+      `必填：${identityHeader} ${identities.join('|')}`,
       '可选：有效|停用（默认有效）',
     ];
     const headers = [...importHeadersForScope(scope)];
@@ -273,7 +273,21 @@ export class PeopleService {
         continue;
       }
 
-      const identity = identityRaw || defaultIdentityForScope(scope);
+      if (!phone) {
+        errors.push({ row: rowNumber, field: PEOPLE_IMPORT_PHONE_HEADER, message: '手机不能为空' });
+        continue;
+      }
+
+      if (!identityRaw) {
+        errors.push({
+          row: rowNumber,
+          field: identityHeader,
+          message: `${identityHeader}不能为空，须为：${allowedIdentities.join('、')}`,
+        });
+        continue;
+      }
+
+      const identity = identityRaw;
       if (!(allowedIdentities as readonly string[]).includes(identity)) {
         errors.push({
           row: rowNumber,

@@ -98,7 +98,7 @@ describe('People Import API (e2e)', () => {
       const name = `ImportE2E员工${stamp}`;
       const buffer = createExcelBuffer([
         ['姓名', '手机', '身份', '状态'],
-        [name, '13900006111', '', ''],
+        [name, '13900006111', '物管人员', ''],
       ]);
 
       const response = await request(app.getHttpServer())
