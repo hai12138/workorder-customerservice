@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put, Query, Res, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Query, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { RequirePermissions, RolesGuard } from '../../common/guards/roles.guard';
 import { CreatePersonDto } from './dto/create-person.dto';
@@ -19,11 +19,12 @@ export class PeopleController {
   }
 
   @Get('template')
-  async downloadTemplate(@Query() query: QueryPeopleTemplateDto, @Res({ passthrough: true }) res: any) {
+  async downloadTemplate(@Query() query: QueryPeopleTemplateDto) {
     const buffer = await this.people.generateTemplate(query.scope);
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename=people_${query.scope}_template.xlsx`);
-    return buffer;
+    return new StreamableFile(buffer, {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: `attachment; filename=people_${query.scope}_template.xlsx`,
+    });
   }
 
   @Post('import')

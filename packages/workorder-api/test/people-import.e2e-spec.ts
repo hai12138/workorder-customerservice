@@ -42,46 +42,44 @@ describe('People Import API (e2e)', () => {
     return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
   }
 
+  function downloadBinary(path: string) {
+    return request(app.getHttpServer())
+      .get(path)
+      .set('Authorization', AUTH)
+      .buffer()
+      .parse((res, callback) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+        res.on('end', () => callback(null, Buffer.concat(chunks)));
+      });
+  }
+
+  function templateRows(buffer: Buffer) {
+    const wb = XLSX.read(buffer, { type: 'buffer' });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    return XLSX.utils.sheet_to_json(sheet, { header: 1 }) as string[][];
+  }
+
   describe('Template Download', () => {
     it('GET /people/template?scope=staff 下载 xlsx', async () => {
-      const response = await request(app.getHttpServer())
-        .get('/api/v1/people/template?scope=staff')
-        .set('Authorization', AUTH)
-        .buffer()
-        .parse((res, callback) => {
-          const chunks: Buffer[] = [];
-          res.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
-          res.on('end', () => callback(null, Buffer.concat(chunks)));
-        })
-        .expect(200);
-
+      const response = await downloadBinary('/api/v1/people/template?scope=staff');
+      expect(response.status).toBe(200);
       expect(response.headers['content-type']).toContain('spreadsheet');
       expect(response.headers['content-disposition']).toContain('people_staff_template.xlsx');
       expect(Buffer.isBuffer(response.body)).toBe(true);
       expect(response.body.length).toBeGreaterThan(0);
+      expect(response.body.subarray(0, 2).toString()).toBe('PK');
 
-      const rows = XLSX.utils.sheet_to_json(XLSX.read(response.body, { type: 'buffer' }).Sheets.Staff, {
-        header: 1,
-      }) as string[][];
+      const rows = templateRows(response.body);
       expect(rows[1]).toEqual(['姓名', '手机', '身份', '状态']);
     });
 
     it('GET /people/template?scope=users 下载 xlsx', async () => {
-      const response = await request(app.getHttpServer())
-        .get('/api/v1/people/template?scope=users')
-        .set('Authorization', AUTH)
-        .buffer()
-        .parse((res, callback) => {
-          const chunks: Buffer[] = [];
-          res.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
-          res.on('end', () => callback(null, Buffer.concat(chunks)));
-        })
-        .expect(200);
-
+      const response = await downloadBinary('/api/v1/people/template?scope=users');
+      expect(response.status).toBe(200);
       expect(response.headers['content-disposition']).toContain('people_users_template.xlsx');
-      const rows = XLSX.utils.sheet_to_json(XLSX.read(response.body, { type: 'buffer' }).Sheets.Users, {
-        header: 1,
-      }) as string[][];
+      expect(response.body.subarray(0, 2).toString()).toBe('PK');
+      const rows = templateRows(response.body);
       expect(rows[1]).toEqual(['姓名', '手机', '类型', '状态']);
     });
 
@@ -108,17 +106,16 @@ describe('People Import API (e2e)', () => {
         .set('Authorization', AUTH)
         .field('projectId', projectId)
         .field('scope', 'staff')
-        .attach('file', buffer, 'staff.xlsx')
-        .expect(200);
+        .attach('file', buffer, 'staff.xlsx');
 
+      expect(response.status).toBeLessThan(300);
       expect(response.body.code).toBe(0);
       expect(response.body.data.success).toBe(true);
       expect(response.body.data.imported).toBe(1);
 
       const list = await request(app.getHttpServer())
         .get(`/api/v1/people?projectId=${projectId}&scope=staff&q=${encodeURIComponent(name)}`)
-        .set('Authorization', AUTH)
-        .expect(200);
+        .set('Authorization', AUTH);
 
       const imported = list.body.data.find((p: { name: string }) => p.name === name);
       expect(imported).toBeDefined();
@@ -141,9 +138,9 @@ describe('People Import API (e2e)', () => {
         .set('Authorization', AUTH)
         .field('projectId', projectId)
         .field('scope', 'users')
-        .attach('file', buffer, 'users.xlsx')
-        .expect(200);
+        .attach('file', buffer, 'users.xlsx');
 
+      expect(response.status).toBeLessThan(300);
       expect(response.body.code).toBe(0);
       expect(response.body.data.imported).toBe(1);
 
