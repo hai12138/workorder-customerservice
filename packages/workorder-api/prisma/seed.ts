@@ -119,6 +119,24 @@ export async function main() {
         identity: '业主',
         status: '有效',
       },
+      {
+        id: 'jiashu',
+        tenantId: TENANT_ID,
+        name: '王家属',
+        phone: '13800000071',
+        passwordHash: 'dev',
+        identity: '家属',
+        status: '有效',
+      },
+      {
+        id: 'weizhi',
+        tenantId: TENANT_ID,
+        name: '陈未设',
+        phone: '13800000072',
+        passwordHash: 'dev',
+        identity: '类型未设置',
+        status: '有效',
+      },
     ],
   });
 
@@ -239,6 +257,8 @@ export async function main() {
       { projectId: PROJECT_XINGLAN_ID, userId: 'chenbin' },
       { projectId: PROJECT_XINGLAN_ID, userId: 'linzhou' },
       { projectId: PROJECT_XINGLAN_ID, userId: 'linyue' },
+      { projectId: PROJECT_XINGLAN_ID, userId: 'jiashu' },
+      { projectId: PROJECT_XINGLAN_ID, userId: 'weizhi' },
     ],
   });
 

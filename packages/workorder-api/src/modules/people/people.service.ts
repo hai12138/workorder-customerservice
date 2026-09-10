@@ -4,24 +4,57 @@ import { CreatePersonDto } from './dto/create-person.dto';
 import { QueryPeopleDto } from './dto/query-people.dto';
 import { UpdatePersonDto } from './dto/update-person.dto';
 import {
-  DEFAULT_EMPLOYEE_IDENTITY,
-  EMPLOYEE_IDENTITIES,
-  isEmployeeIdentity,
+  DEFAULT_PEOPLE_SCOPE,
+  defaultIdentityForScope,
+  identitiesForScope,
+  scopeOfIdentity,
   USER_STATUS_ACTIVE,
+  type PeopleScope,
   type UserStatusValue,
 } from './people.constants';
 
-export type PersonRecord = {
+type PersonInclude = {
   id: string;
   name: string;
   phone: string | null;
   identity: string;
   status: string;
-  teamName?: string;
-  channel?: string;
-  projectId?: string;
-  projectName?: string;
+  createdAt: Date;
+  memberships: Array<{ projectId: string; project: { name: string } }>;
+  teamMembers: Array<{ team: { name: string; projectId: string } }>;
+  roles: Array<{ role: { name: string } }>;
+  channelBindings?: Array<unknown>;
 };
+
+export type StaffPersonRecord = {
+  id: string;
+  name: string;
+  phone: string | null;
+  identity: string;
+  status: string;
+  employeeNo: string;
+  teamName: string | null;
+  roleName: string | null;
+  onlineStatus: null;
+  channel: string;
+  projectId: string;
+  projectName: string;
+};
+
+export type UserPersonRecord = {
+  id: string;
+  name: string;
+  phone: string | null;
+  identity: string;
+  status: string;
+  spaceLabel: null;
+  relationStatus: null;
+  relationSource: null;
+  updatedAt: string;
+  projectId: string;
+};
+
+export type PersonRecord = StaffPersonRecord | UserPersonRecord;
 
 @Injectable()
 export class PeopleService {
@@ -29,11 +62,17 @@ export class PeopleService {
 
   async list(query: QueryPeopleDto): Promise<PersonRecord[]> {
     await this.requireProject(query.projectId);
+    const scope = query.scope ?? DEFAULT_PEOPLE_SCOPE;
+    const allowed = identitiesForScope(scope);
+    const identity = query.identity?.trim();
+    if (identity && !(allowed as readonly string[]).includes(identity)) {
+      return [];
+    }
 
     const q = query.q?.trim();
     const users = await this.prisma.user.findMany({
       where: {
-        identity: { in: [...EMPLOYEE_IDENTITIES] },
+        identity: identity ?? { in: [...allowed] },
         memberships: { some: { projectId: query.projectId } },
         ...(query.status ? { status: query.status } : {}),
         ...(q
@@ -41,6 +80,9 @@ export class PeopleService {
               OR: [
                 { name: { contains: q, mode: 'insensitive' as const } },
                 { phone: { contains: q, mode: 'insensitive' as const } },
+                ...(scope === 'staff'
+                  ? [{ id: { contains: q, mode: 'insensitive' as const } }]
+                  : []),
               ],
             }
           : {}),
@@ -49,14 +91,17 @@ export class PeopleService {
       orderBy: { createdAt: 'asc' },
     });
 
-    return users.map((u) => this.toRecord(u, query.projectId));
+    return users.map((u) => this.toRecord(u, scope, query.projectId));
   }
 
   async create(dto: CreatePersonDto): Promise<PersonRecord> {
     await this.requireProject(dto.projectId);
-    const identity = dto.identity ?? DEFAULT_EMPLOYEE_IDENTITY;
-    if (!isEmployeeIdentity(identity)) {
-      throw new BadRequestException('身份必须是管理员、物管人员或员工');
+    const scope = dto.scope ?? DEFAULT_PEOPLE_SCOPE;
+    const identity = dto.identity ?? defaultIdentityForScope(scope);
+    if (!(identitiesForScope(scope) as readonly string[]).includes(identity)) {
+      throw new BadRequestException(
+        scope === 'staff' ? '身份必须是管理员、物管人员或员工' : '身份必须是业主、租户、家属或类型未设置',
+      );
     }
 
     const user = await this.prisma.user.create({
@@ -65,19 +110,25 @@ export class PeopleService {
         name: dto.name.trim(),
         phone: this.normalizePhone(dto.phone),
         identity,
-        status: USER_STATUS_ACTIVE,
+        status: dto.status ?? USER_STATUS_ACTIVE,
         memberships: { create: { projectId: dto.projectId } },
       },
       include: this.personInclude(dto.projectId),
     });
 
-    return this.toRecord(user, dto.projectId);
+    return this.toRecord(user, scope, dto.projectId);
   }
 
   async update(id: string, dto: UpdatePersonDto, projectId?: string): Promise<PersonRecord> {
-    const existing = await this.requireEmployee(id);
-    if (dto.identity && !isEmployeeIdentity(dto.identity)) {
-      throw new BadRequestException('身份必须是管理员、物管人员或员工');
+    const existing = await this.requirePerson(id);
+    const scope = scopeOfIdentity(existing.identity);
+    if (!scope) {
+      throw new NotFoundException('用户不存在');
+    }
+    if (dto.identity && !(identitiesForScope(scope) as readonly string[]).includes(dto.identity)) {
+      throw new BadRequestException(
+        scope === 'staff' ? '身份必须是管理员、物管人员或员工' : '身份必须是业主、租户、家属或类型未设置',
+      );
     }
     if (dto.name !== undefined && !dto.name.trim()) {
       throw new BadRequestException('姓名不能为空');
@@ -95,7 +146,7 @@ export class PeopleService {
       include: this.personInclude(pid),
     });
 
-    return this.toRecord(updated, pid);
+    return this.toRecord(updated, scope, pid);
   }
 
   async setStatus(id: string, status: UserStatusValue): Promise<PersonRecord> {
@@ -108,17 +159,18 @@ export class PeopleService {
     return project;
   }
 
-  private async requireEmployee(id: string) {
+  private async requirePerson(id: string) {
     const user = await this.prisma.user.findUnique({
       where: { id },
       include: {
         memberships: { include: { project: true } },
         teamMembers: { include: { team: true } },
         channelBindings: true,
+        roles: { include: { role: true } },
       },
     });
-    if (!user || !isEmployeeIdentity(user.identity)) {
-      throw new NotFoundException('员工不存在');
+    if (!user || !scopeOfIdentity(user.identity)) {
+      throw new NotFoundException('用户不存在');
     }
     return user;
   }
@@ -131,22 +183,15 @@ export class PeopleService {
       },
       teamMembers: { include: { team: true } },
       channelBindings: true,
+      roles: { include: { role: true } },
     } as const;
   }
 
-  private toRecord(
-    user: {
-      id: string;
-      name: string;
-      phone: string | null;
-      identity: string;
-      status: string;
-      memberships: Array<{ projectId: string; project: { name: string } }>;
-      teamMembers: Array<{ team: { name: string; projectId: string } }>;
-      channelBindings?: Array<unknown>;
-    },
-    projectId?: string,
-  ): PersonRecord {
+  private toRecord(user: PersonInclude, scope: PeopleScope, projectId?: string): PersonRecord {
+    return scope === 'staff' ? this.toStaffRecord(user, projectId) : this.toUserRecord(user, projectId);
+  }
+
+  private toStaffRecord(user: PersonInclude, projectId?: string): StaffPersonRecord {
     const mem =
       (projectId ? user.memberships.find((m) => m.projectId === projectId) : undefined) ??
       user.memberships[0];
@@ -160,10 +205,31 @@ export class PeopleService {
       phone: user.phone,
       identity: user.identity,
       status: user.status,
-      teamName: team?.team.name ?? '—',
+      employeeNo: user.id,
+      teamName: team?.team.name ?? null,
+      roleName: user.roles[0]?.role.name ?? null,
+      onlineStatus: null,
       channel: user.channelBindings?.length ? '已绑定' : '未绑定',
       projectId: mem?.projectId ?? projectId ?? '',
       projectName: mem?.project.name ?? '—',
+    };
+  }
+
+  private toUserRecord(user: PersonInclude, projectId?: string): UserPersonRecord {
+    const mem =
+      (projectId ? user.memberships.find((m) => m.projectId === projectId) : undefined) ??
+      user.memberships[0];
+    return {
+      id: user.id,
+      name: user.name,
+      phone: user.phone,
+      identity: user.identity,
+      status: user.status,
+      spaceLabel: null,
+      relationStatus: null,
+      relationSource: null,
+      updatedAt: user.createdAt.toISOString(),
+      projectId: mem?.projectId ?? projectId ?? '',
     };
   }
 

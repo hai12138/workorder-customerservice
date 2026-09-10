@@ -1,10 +1,14 @@
 import { IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator';
-import { USER_STATUSES } from '../people.constants';
+import { PEOPLE_SCOPES, USER_STATUSES } from '../people.constants';
 
 export class QueryPeopleDto {
   @IsString()
   @IsNotEmpty()
   projectId!: string;
+
+  @IsIn([...PEOPLE_SCOPES])
+  @IsOptional()
+  scope?: (typeof PEOPLE_SCOPES)[number];
 
   @IsIn([...USER_STATUSES])
   @IsOptional()
@@ -13,4 +17,8 @@ export class QueryPeopleDto {
   @IsString()
   @IsOptional()
   q?: string;
+
+  @IsString()
+  @IsOptional()
+  identity?: string;
 }
