@@ -27,6 +27,7 @@ const HANDLE = ['派单', '接单', '提交处理记录', '完成工单', '转�
 const AI = ['AI 助手代客报单', '知识问询']
 
 export const DEFAULT_ROLE_ID = 'project-user'
+export const ROLE_READONLY_NOTE = '系统基础角色，基础能力只读，不可在此处调整。'
 
 export const STATIC_ROLES = [
   {
@@ -36,7 +37,7 @@ export const STATIC_ROLES = [
     scope: '本人数据',
     members: 14,
     readonly: true,
-    readonlyNote: '系统基础角色，基础能力只读，不可在此处调整',
+    readonlyNote: ROLE_READONLY_NOTE,
     permissions: ['查看本人任务', 'AI 助手代客报单', '知识问询'],
   },
   {
@@ -74,7 +75,7 @@ export const STATIC_ROLES = [
     members: 1,
     readonly: true,
     fixed: true,
-    readonlyNote: '平台内置角色，权限固定只读，不可在此处调整',
+    readonlyNote: ROLE_READONLY_NOTE,
     permissions: [...ROLE_PERM_ITEMS],
   },
 ]

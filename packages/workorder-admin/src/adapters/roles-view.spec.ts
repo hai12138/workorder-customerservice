@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { DEFAULT_ROLE_ID, ROLE_PERM_GROUPS, ROLE_PERM_ITEMS, ROLE_PERM_TOTAL, STATIC_ROLES } from '../data/roles-static.js'
+import { DEFAULT_ROLE_ID, ROLE_PERM_GROUPS, ROLE_PERM_ITEMS, ROLE_PERM_TOTAL, ROLE_READONLY_NOTE, STATIC_ROLES } from '../data/roles-static.js'
 import { roles, setSelectedRoleId } from './pages.js'
 
 function switchOnCount(html: string) {
@@ -13,9 +13,28 @@ describe('roles WEB-04 readonly three-column', () => {
 
   it('keeps 4 groups / 16 permissions and five roles', () => {
     expect(ROLE_PERM_GROUPS.map((g) => g.title)).toEqual(['查看', '工单处置', 'AI 与知识', '配置与管理'])
+    expect(ROLE_PERM_ITEMS).toEqual([
+      '查看项目数据',
+      '查看本人任务',
+      '查看全部工单',
+      '派单',
+      '接单',
+      '提交处理记录',
+      '完成工单',
+      '转派',
+      '取消工单',
+      'AI 助手代客报单',
+      '知识问询',
+      '工单配置',
+      '用户管理',
+      '角色权限管理',
+      '上线检查',
+      '异常处理',
+    ])
     expect(ROLE_PERM_TOTAL).toBe(16)
-    expect(ROLE_PERM_ITEMS).toHaveLength(16)
     expect(STATIC_ROLES.map((r) => r.title)).toEqual(['项目用户', '物业客服', '物管人员', '项目管理员', '平台管理员'])
+    expect(STATIC_ROLES.find((r) => r.id === 'project-user')?.readonlyNote).toBe(ROLE_READONLY_NOTE)
+    expect(STATIC_ROLES.find((r) => r.id === 'platform-admin')?.readonlyNote).toBe(ROLE_READONLY_NOTE)
   })
 
   it('defaults to 项目用户 with readonly matrix, impact card and deferred create', () => {
@@ -35,7 +54,7 @@ describe('roles WEB-04 readonly three-column', () => {
     expect(html).toContain('基础角色 · 本人数据')
     expect(html).toContain('项目角色 · 本项目')
     expect(html).toContain('平台角色 · 全部项目')
-    expect(html).toContain('系统基础角色，基础能力只读，不可在此处调整')
+    expect(html).toContain(ROLE_READONLY_NOTE)
     expect(html).toContain('只读')
     expect(html).toContain('3 / 16')
     expect(html).toContain('14 人')
@@ -84,7 +103,7 @@ describe('roles WEB-04 readonly three-column', () => {
     expect(platform).toContain('1 人')
     expect(platform).toContain('全部项目')
     expect(platform).toContain('只读')
-    expect(platform).toContain('平台内置角色，权限固定只读，不可在此处调整')
+    expect(platform).toContain(ROLE_READONLY_NOTE)
     expect(platform).toContain('perm-fixed')
     expect(platform).not.toContain('编辑权限')
     expect(switchOnCount(platform)).toBe(16)
