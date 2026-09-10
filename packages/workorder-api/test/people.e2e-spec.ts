@@ -351,7 +351,7 @@ describe('People API (e2e)', () => {
     expect(userCross.body.code).not.toBe(0);
   });
 
-  it('POST /people scope=users 带 spaceId：创建回显 + 列表回显 spacePath', async () => {
+  it('POST /people scope=users 带 spaceId：创建/列表回显 spaceLabel=父/子 展示串', async () => {
     const floor = await request(app.getHttpServer())
       .post('/api/v1/spaces')
       .set('Authorization', `Bearer ${token}`)
@@ -382,7 +382,7 @@ describe('People API (e2e)', () => {
       expect.objectContaining({
         name: 'E2E带空间业主',
         spaceId: childSpaceId,
-        spaceLabel: 'E2E常用层',
+        spaceLabel: '1栋/E2E常用层',
         spacePath: '1栋/E2E常用层',
         relationStatus: null,
         relationSource: null,
@@ -398,7 +398,7 @@ describe('People API (e2e)', () => {
     expect(row).toEqual(
       expect.objectContaining({
         spaceId: childSpaceId,
-        spaceLabel: 'E2E常用层',
+        spaceLabel: '1栋/E2E常用层',
         spacePath: '1栋/E2E常用层',
       }),
     );

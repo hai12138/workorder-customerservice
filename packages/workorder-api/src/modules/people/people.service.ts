@@ -531,7 +531,8 @@ export class PeopleService {
       names.unshift(cur.name);
       cur = cur.parentId ? byId.get(cur.parentId) : undefined;
     }
-    return { spaceId: node.id, spaceLabel: node.name, spacePath: names.join('/') };
+    const display = names.join('/');
+    return { spaceId: node.id, spaceLabel: display, spacePath: display };
   }
 
   private normalizePhone(phone?: string | null) {

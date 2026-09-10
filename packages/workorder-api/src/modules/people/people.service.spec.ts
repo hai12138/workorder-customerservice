@@ -172,7 +172,7 @@ describe('PeopleService', () => {
       });
     });
 
-    it('scope=users：绑定常用空间时回显 spaceId/spaceLabel/spacePath（含子节点路径）', async () => {
+    it('scope=users：绑定常用空间时 spaceLabel 为父/子展示串（与 spacePath 同值）', async () => {
       prisma.project.findUnique.mockResolvedValue(project);
       prisma.space.findMany.mockResolvedValue([
         { id: 'sp_bld_1', name: '1栋', parentId: null },
@@ -190,7 +190,7 @@ describe('PeopleService', () => {
       expect(result[0]).toMatchObject({
         id: 'linyue',
         spaceId: 'sp_room_1702',
-        spaceLabel: '1702',
+        spaceLabel: '1栋/1702',
         spacePath: '1栋/1702',
       });
     });
