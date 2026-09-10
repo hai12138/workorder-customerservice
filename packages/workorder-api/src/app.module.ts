@@ -12,6 +12,7 @@ import { PeopleModule } from './modules/people/people.module';
 import { NotifyModule } from './modules/notify/notify.module';
 import { AgentModule } from './modules/agent/agent.module';
 import { SpaceModule } from './modules/space/space.module';
+import { RolesModule } from './modules/roles/roles.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { SpaceModule } from './modules/space/space.module';
     WorkbenchModule,
     PeopleModule,
     SpaceModule,
+    RolesModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: JwtAuthGuard }],
 })
