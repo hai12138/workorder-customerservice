@@ -72,7 +72,7 @@ describe('PeopleService', () => {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'People');
     const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
-    return { buffer } as Express.Multer.File;
+    return { buffer, originalname: 'people.xlsx' } as Express.Multer.File;
   }
 
   describe('identity口径', () => {
@@ -408,6 +408,18 @@ describe('PeopleService', () => {
       });
       expect(prisma.$transaction).not.toHaveBeenCalled();
       expect(prisma.user.create).not.toHaveBeenCalled();
+    });
+
+    it('拒绝非 xlsx（不扩部门/班组/角色列）', async () => {
+      prisma.project.findUnique.mockResolvedValue(project);
+      await expect(
+        service.importPeople(
+          { buffer: Buffer.from('姓名,手机,身份,状态\n张三,139,员工,有效'), originalname: 'people.csv' } as Express.Multer.File,
+          project.id,
+          'staff',
+        ),
+      ).rejects.toMatchObject({ message: '仅支持 xlsx 文件' });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
   });
 });

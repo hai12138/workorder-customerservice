@@ -202,6 +202,7 @@ export class PeopleService {
     if (!file) {
       throw new BadRequestException('未上传文件');
     }
+    this.assertXlsxFile(file);
     await this.requireProject(projectId);
 
     let workbook: XLSX.WorkBook;
@@ -333,6 +334,13 @@ export class PeopleService {
       success: true,
       imported: validRows.length,
     };
+  }
+
+  private assertXlsxFile(file: Express.Multer.File) {
+    const name = (file.originalname || '').toLowerCase();
+    if (name && !name.endsWith('.xlsx')) {
+      throw new BadRequestException('仅支持 xlsx 文件');
+    }
   }
 
   private requireScope(scope: string): asserts scope is PeopleScope {

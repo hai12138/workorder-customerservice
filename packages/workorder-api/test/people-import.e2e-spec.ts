@@ -255,5 +255,31 @@ describe('People Import API (e2e)', () => {
       expect(response.body.code).toBeGreaterThan(0);
       expect(response.body.message).toContain('缺少必需列');
     });
+
+    it('仅接受 xlsx，拒绝 csv', async () => {
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/people/import')
+        .set('Authorization', AUTH)
+        .field('projectId', projectId)
+        .field('scope', 'staff')
+        .attach('file', Buffer.from('姓名,手机,身份,状态\n张三,13900006666,员工,有效'), 'people.csv');
+
+      expect(response.body.code).toBeGreaterThan(0);
+      expect(response.body.message).toContain('仅支持 xlsx');
+    });
+
+    it('import 的 scope 必须在 multipart body，不能只靠 query', async () => {
+      const buffer = createExcelBuffer([
+        ['姓名', '手机', '身份', '状态'],
+        ['仅query scope', '13900006777', '员工', '有效'],
+      ]);
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/people/import?scope=staff`)
+        .set('Authorization', AUTH)
+        .field('projectId', projectId)
+        .attach('file', buffer, 'query-scope.xlsx');
+
+      expect(response.body.code).not.toBe(0);
+    });
   });
 });
