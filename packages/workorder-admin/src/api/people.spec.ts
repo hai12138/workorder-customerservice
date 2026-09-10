@@ -124,6 +124,7 @@ describe('people U2 helpers', () => {
       identity: '类型未设置',
     })
     expect(buildPersonWriteBody({ status: '停用' })).toEqual({ status: '停用' })
+    expect(buildPersonWriteBody({ status: '停用' })).not.toHaveProperty('spaceId')
     expect(
       buildPersonWriteBody({
         projectId: 'prj_1',
@@ -141,15 +142,23 @@ describe('people U2 helpers', () => {
       identity: '业主',
       spaceId: 'spc_room',
     })
+    const cleared = buildPersonWriteBody({
+      scope: 'users',
+      name: '林悦',
+      phone: '13800138120',
+      identity: '业主',
+      spaceId: null,
+    })
+    expect(cleared).toMatchObject({ spaceId: null })
+    expect(JSON.stringify(cleared)).toContain('"spaceId":null')
     expect(
       buildPersonWriteBody({
         scope: 'users',
         name: '林悦',
         phone: '13800138120',
         identity: '业主',
-        spaceId: null,
       }),
-    ).toMatchObject({ spaceId: null })
+    ).not.toHaveProperty('spaceId')
     expect(
       buildPersonWriteBody({
         projectId: 'prj_1',

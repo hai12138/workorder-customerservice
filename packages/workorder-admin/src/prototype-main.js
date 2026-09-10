@@ -1462,6 +1462,7 @@ async function handleAction(act, a) {
       const id = a.dataset.id
       try {
         if (scope === 'users') {
+          // 树选：合法 id 绑定；未绑定显式 null 清空。启停走 updatePerson({ status }) 省略 spaceId 不改绑定。
           const spaceRaw = document.getElementById('f-space')?.value
           const spaceId = spaceRaw && String(spaceRaw).trim() ? String(spaceRaw).trim() : null
           if (id) {

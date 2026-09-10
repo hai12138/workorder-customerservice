@@ -9,8 +9,9 @@
  * U3：GET /people/template?scope= 下载 xlsx；POST /people/import multipart
  * 字段 file + projectId + scope（scope 在 form body，不是 query）。
  *
- * U4：users 写 spaceId（可 null 清空）；读 spaceId + spaceLabel + spacePath。
- * 回显优先 spacePath（父/…/子），否则 spaceLabel。关系状态/来源只读。
+ * U4：仅 scope=users 写 spaceId：合法 id 绑定；显式 null 清空；省略字段不改。
+ * 读 spaceId + spaceLabel + spacePath；未绑 null → —。关系状态/来源只读可 null。
+ * space 须属当前 projectId，否则后端 400。
  */
 
 import { api, ApiError } from './http.js'
@@ -104,7 +105,7 @@ export function formatUpdatedAt(value) {
 
 export function personApiMessage(err, actionLabel) {
   if (err?.status === 404) {
-    return `${actionLabel}尚未就绪（/api/v1/people），请确认后端 people U2（scope/字段）已合并`
+    return `${actionLabel}尚未就绪（/api/v1/people），请确认后端 people U2/U4（scope/spaceId）已合并`
   }
   return err?.message || `${actionLabel}失败`
 }
@@ -234,7 +235,10 @@ function normalizeWriteSpaceId(spaceId) {
   return raw ? raw : null
 }
 
-/** POST/PUT 契约字段：scope/projectId/name/phone/identity/status；users 可带 spaceId（null=清空）。 */
+/**
+ * POST/PUT 契约字段：scope/projectId/name/phone/identity/status。
+ * 仅 users：spaceId 合法 id 绑定；显式 null 清空；省略则不改 preferredSpaceId。
+ */
 export function buildPersonWriteBody({ projectId, name, phone, identity, scope, status, spaceId } = {}) {
   const body = {}
   if (projectId) body.projectId = projectId
@@ -263,7 +267,7 @@ export async function createPerson({ projectId, name, phone, identity, scope, sp
     phone,
     identity: identity || (resolvedScope === PEOPLE_SCOPE_USERS ? DEFAULT_USER_IDENTITY : DEFAULT_STAFF_IDENTITY),
     scope: resolvedScope,
-    ...(resolvedScope === PEOPLE_SCOPE_USERS ? { spaceId: spaceId ?? null } : {}),
+    ...(resolvedScope === PEOPLE_SCOPE_USERS && spaceId !== undefined ? { spaceId } : {}),
   })
   return api('/people', {
     method: 'POST',
