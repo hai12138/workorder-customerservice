@@ -905,6 +905,15 @@ async function handleAction(act, a) {
       toast(a.dataset.message || '操作已触发')
       return
     }
+    if (act === 'select-role') {
+      P.setSelectedRoleId(a.dataset.id)
+      render()
+      return
+    }
+    if (act === 'new-role' || act === 'edit-role') {
+      toast('后续')
+      return
+    }
     if (act === 'query') {
       if (current === 'projects') {
         const keyword = document.getElementById('keyword')?.value?.trim() || ''
@@ -1500,19 +1509,17 @@ async function handleAction(act, a) {
       }
       return
     }
-    if (['new-role', 'new-type', 'type-detail', 'new-field', 'new-rule', 'new-plan', 'new-agent-app'].includes(act)) {
+    if (['new-type', 'type-detail', 'new-field', 'new-rule', 'new-plan', 'new-agent-app'].includes(act)) {
       const collection =
-        act.includes('role')
-          ? 'roles'
-          : act.includes('type')
-            ? 'types'
-            : act.includes('field')
-              ? 'fields'
-              : act.includes('rule')
-                ? 'dispatch'
-                : act.includes('plan')
-                  ? 'plans'
-                  : null
+        act.includes('type')
+          ? 'types'
+          : act.includes('field')
+            ? 'fields'
+            : act.includes('rule')
+              ? 'dispatch'
+              : act.includes('plan')
+                ? 'plans'
+                : null
       if (act.endsWith('-detail') || act === 'type-detail') {
         modal(a.textContent.trim() || '详情', `<p class="sub">记录详情（只读演示）。</p><div class="form-grid"><div class="form-row"><label>名称</label><input value="${a.dataset.id || ''}" disabled></div></div>`, `<button class="btn" data-action="close">关闭</button>`)
         return

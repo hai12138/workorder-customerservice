@@ -73,3 +73,20 @@
 .tree-picker-label{flex:1}
 .tree-picker-children{display:none}
 .tree-picker-empty{padding:20px;text-align:center;color:#86868b;font-size:13px}
+
+/* WEB-04 roles: three-column readonly (list + matrix + impact) */
+.role-layout{grid-template-columns:240px minmax(0,1fr) 230px;align-items:start}
+.role{cursor:pointer}
+.role-matrix .switch,.role-matrix .perm-ctl{pointer-events:none}
+.perm-group{margin-bottom:16px}
+.perm-group:last-child{margin-bottom:0}
+.perm-group h3{margin:0 0 8px;font-size:13px;font-weight:650;color:#6e6e73}
+.perm-ctl{float:right;display:inline-flex;align-items:center;gap:8px}
+.perm-fixed{font-size:11px}
+.role-impact h2{margin-bottom:14px}
+.role-impact dl{margin:0;display:grid;gap:12px}
+.role-impact dt{display:block;color:#86868b;font-size:12px;margin-bottom:4px}
+.role-impact dd{margin:0;font-weight:650}
+.btn.is-disabled{opacity:.45;cursor:not-allowed;box-shadow:none;transform:none}
+.btn.is-disabled:hover{transform:none;box-shadow:none;border-color:rgba(0,0,0,.095);background:rgba(255,255,255,.82);color:#2c2c2e}
+@media(max-width:720px){.role-layout{grid-template-columns:1fr}}
