@@ -37,11 +37,13 @@ import {
   peopleImportSuccessCount,
   peopleIoApiMessage,
   personApiMessage,
+  preferredSpaceDisplay,
   scopeFromTab,
   staffRoleLabel,
   toPersonRecord,
   updatePerson,
 } from './api/people.js'
+import { buildAnyNodeTreePicker, buildParentTreePicker, initTreePicker } from './ui/space-tree-picker.js'
 import { notifyApi } from './api/notify.js'
 import { agentApi } from './api/agent.js'
 import { CHINA_PCA, BUSINESS_TYPES } from './data/china-pca.js'
@@ -73,6 +75,8 @@ projectSelect?.addEventListener('change', async () => {
   setProjectId(projectSelect.value)
   clearSelectedSpaceId()
   clearPeopleListCache()
+  const portal = document.getElementById('portal')
+  if (portal) portal.innerHTML = ''
   toast('正在切换项目…')
   try {
     await refresh()
@@ -283,7 +287,7 @@ async function loadPeopleList({ silent = false } = {}) {
   }
 }
 
-function personForm(rec, scope) {
+function personForm(rec, scope, spaces = []) {
   const name = rec?.title || rec?.values?.name || ''
   const phone = rec?.values?.phone || ''
   if (scope === 'users') {
@@ -297,7 +301,10 @@ function personForm(rec, scope) {
       <div class="form-row"><label>* 姓名</label><input id="f-name" value="${esc(name)}" placeholder="请输入姓名"></div>
       <div class="form-row"><label>* 手机号</label><input id="f-phone" value="${esc(phone)}" placeholder="11 位手机号" maxlength="11"></div>
       <div class="form-row"><label>项目用户类型</label><select id="f-identity">${opts}</select></div>
-      <div class="form-row"><label>常用空间</label><input id="f-space" value="${esc(rec?.values?.spaceLabel || '')}" placeholder="可选"></div>
+      <div class="form-row full"><label>常用空间</label>
+        <div class="tree-picker-container" id="preferred-space-picker">${buildAnyNodeTreePicker(spaces, rec?.values?.spaceId || '')}</div>
+        <input type="hidden" id="f-space" value="${esc(rec?.values?.spaceId || '')}">
+      </div>
     </div>`
   }
   const currentLabel = staffRoleLabel(rec?.values?.identity) || DEFAULT_STAFF_IDENTITY
@@ -313,6 +320,31 @@ function personForm(rec, scope) {
     <div class="form-row"><label>* 部门/班组</label><input id="f-team" value="${esc(rec?.values?.teamName || '')}" placeholder="请输入部门/班组"></div>
     <div class="form-row"><label>项目角色</label><select id="f-identity">${opts}</select></div>
   </div>`
+}
+
+function bindPreferredSpacePicker(selectedId = '') {
+  const picker = initTreePicker('preferred-space-picker', (spaceId) => {
+    const input = document.getElementById('f-space')
+    if (input) input.value = spaceId || ''
+  })
+  picker?.setSelectedId(selectedId || '')
+}
+
+async function openPersonModal(rec, scope) {
+  let spaces = []
+  if (scope === 'users') {
+    await loadSpacesData()
+    spaces = getSpacesCache()?.list || []
+  }
+  const isNew = !rec
+  modal(
+    scope === 'staff' ? (isNew ? '新增员工' : '编辑员工') : isNew ? '新增项目用户' : '编辑项目用户',
+    personForm(rec, scope, spaces),
+    `<button class="btn" data-action="close">取消</button><button class="btn primary" data-action="save-person"${rec ? ` data-id="${esc(rec.id)}"` : ''} data-scope="${scope}">保存</button>`,
+  )
+  if (scope === 'users') {
+    setTimeout(() => bindPreferredSpacePicker(rec?.values?.spaceId || ''), 0)
+  }
 }
 
 function render() {
@@ -797,136 +829,6 @@ function esc(str) {
   const div = document.createElement('div')
   div.textContent = str
   return div.innerHTML
-}
-
-// Helper to build tree-shaped parent picker
-function buildParentTreePicker(spaces, currentSpaceId = null, selectedParentId = null) {
-  if (!spaces || spaces.length === 0) {
-    return '<div class="tree-picker-empty">暂无可选空间</div>'
-  }
-  
-  // Build tree structure
-  const spaceMap = new Map()
-  spaces.forEach(s => spaceMap.set(s.id, { ...s, children: [] }))
-  
-  const rootNodes = []
-  spaces.forEach(s => {
-    const node = spaceMap.get(s.id)
-    if (!s.parentId) {
-      rootNodes.push(node)
-    } else {
-      const parent = spaceMap.get(s.parentId)
-      if (parent) parent.children.push(node)
-    }
-  })
-  
-  // Get descendants of current space (to disable them)
-  const getDescendantIds = (spaceId) => {
-    const ids = new Set([spaceId])
-    const space = spaceMap.get(spaceId)
-    if (space && space.children) {
-      space.children.forEach(child => {
-        getDescendantIds(child.id).forEach(id => ids.add(id))
-      })
-    }
-    return ids
-  }
-  
-  const disabledIds = currentSpaceId ? getDescendantIds(currentSpaceId) : new Set()
-  
-  // Render tree with expand/collapse
-  const renderNode = (node, level = 1, path = []) => {
-    const hasChildren = node.children && node.children.length > 0
-    const isDisabled = disabledIds.has(node.id)
-    const isSelected = node.id === selectedParentId
-    const indent = (level - 1) * 20
-    
-    let html = `<div class="tree-picker-item ${isDisabled ? 'disabled' : ''} ${isSelected ? 'selected' : ''}" 
-                     data-space-id="${esc(node.id)}" 
-                     data-disabled="${isDisabled}"
-                     style="padding-left: ${indent}px">`
-    
-    if (hasChildren) {
-      html += `<span class="tree-picker-expand" data-space-id="${esc(node.id)}">▸</span>`
-    } else {
-      html += `<span class="tree-picker-spacer"></span>`
-    }
-    
-    html += `<span class="tree-picker-label">${esc(node.name)}</span>`
-    html += `</div>`
-    
-    if (hasChildren) {
-      html += `<div class="tree-picker-children" data-parent-id="${esc(node.id)}" style="display: none;">`
-      node.children.forEach(child => {
-        html += renderNode(child, level + 1, [...path, node.id])
-      })
-      html += `</div>`
-    }
-    
-    return html
-  }
-  
-  let html = '<div class="tree-picker">'
-  html += `<div class="tree-picker-item no-parent" data-space-id="" data-disabled="false">
-    <span class="tree-picker-spacer"></span>
-    <span class="tree-picker-label">无上级（项目根节点）</span>
-  </div>`
-  
-  rootNodes.forEach(node => {
-    html += renderNode(node)
-  })
-  
-  html += '</div>'
-  return html
-}
-
-// Initialize tree picker interaction
-function initTreePicker(containerId, onSelect) {
-  const container = document.getElementById(containerId)
-  if (!container) return
-  
-  let selectedId = null
-  
-  // Handle expand/collapse
-  container.addEventListener('click', (e) => {
-    const expandBtn = e.target.closest('.tree-picker-expand')
-    if (expandBtn) {
-      e.stopPropagation()
-      const spaceId = expandBtn.dataset.spaceId
-      const childrenDiv = container.querySelector(`.tree-picker-children[data-parent-id="${spaceId}"]`)
-      if (childrenDiv) {
-        const isExpanded = childrenDiv.style.display !== 'none'
-        childrenDiv.style.display = isExpanded ? 'none' : 'block'
-        expandBtn.textContent = isExpanded ? '▸' : '▾'
-      }
-      return
-    }
-    
-    // Handle selection
-    const item = e.target.closest('.tree-picker-item')
-    if (item && item.dataset.disabled !== 'true') {
-      const spaceId = item.dataset.spaceId
-      
-      // Update UI
-      container.querySelectorAll('.tree-picker-item').forEach(el => {
-        el.classList.remove('selected')
-      })
-      item.classList.add('selected')
-      
-      selectedId = spaceId
-      if (onSelect) onSelect(spaceId)
-    }
-  })
-  
-  return {
-    getSelectedId: () => selectedId,
-    setSelectedId: (id) => {
-      selectedId = id
-      container.querySelectorAll('.tree-picker-item').forEach(el => {
-        el.classList.toggle('selected', el.dataset.spaceId === id)
-      })
-    }
-  }
 }
 
 // Store filter state globally
@@ -1510,22 +1412,14 @@ async function handleAction(act, a) {
     }
     if (act === 'new-person') {
       const scope = scopeFromTab(getPeopleTab())
-      modal(
-        scope === 'staff' ? '新增员工' : '新增项目用户',
-        personForm(null, scope),
-        `<button class="btn" data-action="close">取消</button><button class="btn primary" data-action="save-person" data-scope="${scope}">保存</button>`,
-      )
+      await openPersonModal(null, scope)
       return
     }
     if (act === 'person-edit') {
       const rec = findPerson(a.dataset.id)
       if (!rec) return toast('未找到人员')
       const scope = isProjectUserIdentity(rec.values?.identity) ? 'users' : 'staff'
-      modal(
-        scope === 'staff' ? '编辑员工' : '编辑项目用户',
-        personForm(rec, scope),
-        `<button class="btn" data-action="close">取消</button><button class="btn primary" data-action="save-person" data-id="${esc(rec.id)}" data-scope="${scope}">保存</button>`,
-      )
+      await openPersonModal(rec, scope)
       return
     }
     if (act === 'person-detail') {
@@ -1537,7 +1431,7 @@ async function handleAction(act, a) {
           <div><span>姓名</span><b>${esc(dash(rec.title))}</b></div>
           <div><span>手机号</span><b>${esc(dash(rec.values?.phone))}</b></div>
           <div><span>项目用户类型</span><b>${esc(dash(rec.values?.identity))}</b></div>
-          <div><span>常用空间</span><b>${esc(dash(rec.values?.spaceLabel))}</b></div>
+          <div><span>常用空间</span><b>${esc(preferredSpaceDisplay(rec.values))}</b></div>
           <div><span>项目关系状态</span><b>${esc(dash(rec.values?.relationStatus))}</b></div>
           <div><span>关系来源</span><b>${esc(dash(rec.values?.relationSource))}</b></div>
           <div><span>更新时间</span><b>${esc(dash(rec.values?.updatedAt))}</b></div>`
@@ -1568,11 +1462,14 @@ async function handleAction(act, a) {
       const id = a.dataset.id
       try {
         if (scope === 'users') {
+          // 树选：合法 id 绑定；未绑定显式 null 清空。启停走 updatePerson({ status }) 省略 spaceId 不改绑定。
+          const spaceRaw = document.getElementById('f-space')?.value
+          const spaceId = spaceRaw && String(spaceRaw).trim() ? String(spaceRaw).trim() : null
           if (id) {
-            await updatePerson(id, { name, phone, identity, scope })
+            await updatePerson(id, { name, phone, identity, scope, spaceId })
             await afterWrite('项目用户已更新')
           } else {
-            await createPerson({ name, phone, identity, scope })
+            await createPerson({ name, phone, identity, scope, spaceId })
             await afterWrite('项目用户已创建')
           }
         } else {
