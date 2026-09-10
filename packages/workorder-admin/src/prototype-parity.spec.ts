@@ -58,6 +58,10 @@ describe('approved prototype UI contract', () => {
     ].forEach((action) => expect(source).toContain(`'${action}'`))
     expect(source).not.toContain('people-u3-toast')
     expect(source).not.toContain('导入/模板下一切片 U3')
+    expect(source).toContain('preferred-space-picker')
+    expect(source).toContain('buildAnyNodeTreePicker')
+    expect(source).toContain('type="hidden" id="f-space"')
+    expect(source).not.toContain('id="f-space" value="${esc(rec?.values?.spaceLabel')
   })
 
   it('keeps real login gate as the frontend entry', () => {

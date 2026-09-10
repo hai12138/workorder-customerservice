@@ -11,6 +11,7 @@ import {
   buildPeopleTemplatePath,
   buildPersonWriteBody,
   dash,
+  preferredSpaceDisplay,
   formatPeopleImportErrors,
   importPeople,
   isProjectUserIdentity,
@@ -123,6 +124,42 @@ describe('people U2 helpers', () => {
       identity: '类型未设置',
     })
     expect(buildPersonWriteBody({ status: '停用' })).toEqual({ status: '停用' })
+    expect(
+      buildPersonWriteBody({
+        projectId: 'prj_1',
+        scope: 'users',
+        name: '林悦',
+        phone: '13800138120',
+        identity: '业主',
+        spaceId: 'spc_room',
+      }),
+    ).toEqual({
+      projectId: 'prj_1',
+      scope: 'users',
+      name: '林悦',
+      phone: '13800138120',
+      identity: '业主',
+      spaceId: 'spc_room',
+    })
+    expect(
+      buildPersonWriteBody({
+        scope: 'users',
+        name: '林悦',
+        phone: '13800138120',
+        identity: '业主',
+        spaceId: null,
+      }),
+    ).toMatchObject({ spaceId: null })
+    expect(
+      buildPersonWriteBody({
+        projectId: 'prj_1',
+        scope: 'staff',
+        name: '周管理',
+        phone: '13800000000',
+        identity: '项目管理员',
+        spaceId: 'spc_room',
+      }),
+    ).not.toHaveProperty('spaceId')
   })
 
   it('unwraps list data as array', () => {
@@ -156,12 +193,19 @@ describe('people U2 helpers', () => {
       phone: '13800138120',
       identity: '业主',
       status: '有效',
-      spaceLabel: 'A栋-1-101',
+      spaceId: 'spc_101',
+      spaceLabel: '101',
+      spacePath: 'A栋/1层/101',
       relationStatus: null,
       relationSource: null,
       updatedAt: null,
     })
-    expect(user.values.spaceLabel).toBe('A栋-1-101')
+    expect(user.values.spaceId).toBe('spc_101')
+    expect(user.values.spaceLabel).toBe('101')
+    expect(user.values.spacePath).toBe('A栋/1层/101')
+    expect(preferredSpaceDisplay(user.values)).toBe('A栋/1层/101')
+    expect(preferredSpaceDisplay({ spaceLabel: 'A栋-1-101' })).toBe('A栋-1-101')
+    expect(preferredSpaceDisplay({ spaceId: null, spaceLabel: null, spacePath: null })).toBe('—')
     expect(user.values.relationStatus).toBeNull()
     expect(user.values.relationSource).toBeNull()
     expect(dash(user.values.relationStatus)).toBe('—')
@@ -181,7 +225,7 @@ describe('people U2 helpers', () => {
     const items = [
       rec({ id: 'a', name: '赵晴', phone: '13800000021', identity: '物管人员', employeeNo: 'E21' }),
       rec({ id: 'b', name: '管理员甲', phone: '13800000000', identity: '管理员' }),
-      rec({ id: 'c', name: '林悦', phone: '13900001111', identity: '业主', spaceLabel: 'A栋' }),
+      rec({ id: 'c', name: '林悦', phone: '13900001111', identity: '业主', spaceLabel: 'A栋', spacePath: 'A栋' }),
       rec({ id: 'd', name: '家属乙', phone: '13700002222', identity: '家属', spaceLabel: 'B栋' }),
     ]
     const staff = applyPeopleClientFilter(items, { scope: 'staff', identity: ALL_STAFF_ROLE })

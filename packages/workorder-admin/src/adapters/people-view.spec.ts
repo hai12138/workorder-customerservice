@@ -35,7 +35,22 @@ const mixed = [
     phone: '13800138120',
     identity: '业主',
     status: '有效',
+    spaceId: null,
     spaceLabel: null,
+    spacePath: null,
+    relationStatus: null,
+    relationSource: null,
+    updatedAt: null,
+  }),
+  toPersonRecord({
+    id: 'user-2',
+    name: '陈途',
+    phone: '13800138002',
+    identity: '租户',
+    status: '有效',
+    spaceId: 'spc_101',
+    spaceLabel: '101',
+    spacePath: 'A栋/1层/101',
     relationStatus: null,
     relationSource: null,
     updatedAt: null,
@@ -73,6 +88,8 @@ describe('peopleView U2 tabs / columns / filters', () => {
     expect(html).toContain('林悦')
     expect(html).not.toContain('赵晴')
     expect(html).toContain('—')
+    expect(html).toContain('A栋/1层/101')
+    expect(html).toContain('陈途')
   })
 
   it('renders 员工账号 role filter, mapped role label, masked phone and columns', () => {
