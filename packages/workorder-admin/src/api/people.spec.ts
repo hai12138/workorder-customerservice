@@ -7,6 +7,7 @@ import {
   USER_IDENTITIES,
   applyPeopleClientFilter,
   buildPeopleQuery,
+  buildPersonWriteBody,
   dash,
   isProjectUserIdentity,
   isStaffIdentity,
@@ -82,6 +83,40 @@ describe('people U2 helpers', () => {
     })
     expect(all.get('identity')).toBeNull()
     expect(ALL_USER_TYPE).toBe('全部类型')
+  })
+
+  it('write body 只传契约字段，员工 identity 映射到后端枚举', () => {
+    expect(
+      buildPersonWriteBody({
+        projectId: 'prj_1',
+        scope: 'staff',
+        name: '周管理',
+        phone: '13800000000',
+        identity: '项目管理员',
+      }),
+    ).toEqual({
+      projectId: 'prj_1',
+      scope: 'staff',
+      name: '周管理',
+      phone: '13800000000',
+      identity: '管理员',
+    })
+    expect(
+      buildPersonWriteBody({
+        projectId: 'prj_1',
+        scope: 'users',
+        name: '林悦',
+        phone: '13800138120',
+        identity: '类型未设置',
+      }),
+    ).toEqual({
+      projectId: 'prj_1',
+      scope: 'users',
+      name: '林悦',
+      phone: '13800138120',
+      identity: '类型未设置',
+    })
+    expect(buildPersonWriteBody({ status: '停用' })).toEqual({ status: '停用' })
   })
 
   it('unwraps list data as array', () => {

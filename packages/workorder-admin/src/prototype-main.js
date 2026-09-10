@@ -29,7 +29,6 @@ import {
   applyPeopleClientFilter,
   createPerson,
   dash,
-  generateEmployeeNo,
   isProjectUserIdentity,
   isValidPhone,
   listPeople,
@@ -302,11 +301,11 @@ function personForm(rec, scope) {
   const opts = STAFF_ROLE_LABELS.map(
     (i) => `<option${i === selected ? ' selected' : ''}>${esc(i)}</option>`,
   ).join('')
-  const employeeNo = rec?.values?.employeeNo || (rec?.id ? '' : generateEmployeeNo())
+  const employeeNo = rec?.values?.employeeNo || rec?.id || ''
   return `<div class="form-grid">
     <div class="form-row"><label>* 姓名</label><input id="f-name" value="${esc(name)}" placeholder="请输入姓名"></div>
     <div class="form-row"><label>* 手机号</label><input id="f-phone" value="${esc(phone)}" placeholder="11 位手机号" maxlength="11"></div>
-    <div class="form-row"><label>员工编号</label><input id="f-employee-no" value="${esc(employeeNo)}" readonly placeholder="保存后由后端返回"></div>
+    <div class="form-row"><label>员工编号</label><input id="f-employee-no" value="${esc(employeeNo)}" readonly placeholder="保存后返回 id"></div>
     <div class="form-row"><label>* 部门/班组</label><input id="f-team" value="${esc(rec?.values?.teamName || '')}" placeholder="请输入部门/班组"></div>
     <div class="form-row"><label>项目角色</label><select id="f-identity">${opts}</select></div>
   </div>`
@@ -1493,23 +1492,21 @@ async function handleAction(act, a) {
       const id = a.dataset.id
       try {
         if (scope === 'users') {
-          const spaceLabel = document.getElementById('f-space')?.value?.trim() || ''
           if (id) {
-            await updatePerson(id, { name, phone, identity, spaceLabel, scope })
+            await updatePerson(id, { name, phone, identity, scope })
             await afterWrite('项目用户已更新')
           } else {
-            await createPerson({ name, phone, identity, spaceLabel, scope })
+            await createPerson({ name, phone, identity, scope })
             await afterWrite('项目用户已创建')
           }
         } else {
           const teamName = document.getElementById('f-team')?.value?.trim() || ''
-          const employeeNo = document.getElementById('f-employee-no')?.value?.trim() || ''
           if (!teamName) return toast('请填写部门/班组')
           if (id) {
-            await updatePerson(id, { name, phone, identity, teamName, employeeNo, scope })
+            await updatePerson(id, { name, phone, identity, scope })
             await afterWrite('员工信息已更新')
           } else {
-            await createPerson({ name, phone, identity, teamName, employeeNo, scope })
+            await createPerson({ name, phone, identity, scope })
             await afterWrite('员工已创建')
           }
         }

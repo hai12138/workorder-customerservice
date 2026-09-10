@@ -96,10 +96,6 @@ export function formatUpdatedAt(value) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-export function generateEmployeeNo() {
-  return `E${Date.now().toString(36).toUpperCase()}`
-}
-
 export function personApiMessage(err, actionLabel) {
   if (err?.status === 404) {
     return `${actionLabel}尚未就绪（/api/v1/people），请确认后端 people U2（scope/字段）已合并`
@@ -215,7 +211,8 @@ export async function listPeople({ projectId, scope, status, q, identity } = {})
   return { items, source: 'api' }
 }
 
-function personWriteBody({ projectId, name, phone, identity, scope, teamName, spaceLabel, employeeNo, status }) {
+/** POST/PUT 契约字段：scope/projectId/name/phone/identity/status。多余键不传。 */
+export function buildPersonWriteBody({ projectId, name, phone, identity, scope, status }) {
   const body = {}
   if (projectId) body.projectId = projectId
   if (scope) body.scope = scope
@@ -227,34 +224,19 @@ function personWriteBody({ projectId, name, phone, identity, scope, teamName, sp
         ? identity
         : staffRoleApi(identity)
   }
-  if (teamName !== undefined) body.teamName = teamName
-  if (spaceLabel !== undefined) body.spaceLabel = spaceLabel
-  if (employeeNo !== undefined) body.employeeNo = employeeNo
   if (status !== undefined) body.status = status
   return body
 }
 
-export async function createPerson({
-  projectId,
-  name,
-  phone,
-  identity,
-  scope,
-  teamName,
-  spaceLabel,
-  employeeNo,
-} = {}) {
+export async function createPerson({ projectId, name, phone, identity, scope } = {}) {
   const pid = projectId || getProjectId()
   const resolvedScope = scope === PEOPLE_SCOPE_USERS ? PEOPLE_SCOPE_USERS : PEOPLE_SCOPE_STAFF
-  const body = personWriteBody({
+  const body = buildPersonWriteBody({
     projectId: pid,
     name,
     phone,
     identity: identity || (resolvedScope === PEOPLE_SCOPE_USERS ? DEFAULT_USER_IDENTITY : DEFAULT_STAFF_IDENTITY),
     scope: resolvedScope,
-    teamName,
-    spaceLabel,
-    employeeNo,
   })
   return api('/people', {
     method: 'POST',
@@ -263,10 +245,18 @@ export async function createPerson({
 }
 
 export async function updatePerson(id, patch = {}) {
-  const body = personWriteBody({
-    ...patch,
-    scope: patch.scope === PEOPLE_SCOPE_USERS ? PEOPLE_SCOPE_USERS : patch.scope === PEOPLE_SCOPE_STAFF ? PEOPLE_SCOPE_STAFF : patch.scope,
+  const scope =
+    patch.scope === PEOPLE_SCOPE_USERS
+      ? PEOPLE_SCOPE_USERS
+      : patch.scope === PEOPLE_SCOPE_STAFF
+        ? PEOPLE_SCOPE_STAFF
+        : undefined
+  const body = buildPersonWriteBody({
+    name: patch.name,
+    phone: patch.phone,
     identity: patch.identity,
+    status: patch.status,
+    scope,
   })
   return api(`/people/${encodeURIComponent(id)}`, {
     method: 'PUT',
