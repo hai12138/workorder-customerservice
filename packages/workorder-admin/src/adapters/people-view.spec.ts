@@ -63,7 +63,10 @@ describe('peopleView U2 tabs / columns / filters', () => {
     expect(html).toContain('姓名 / 手机号 / 空间')
     expect(html).toContain('导入项目用户')
     expect(html).toContain('新增项目用户')
-    expect(html).toContain('data-action="people-u3-toast"')
+    expect(html).toContain('data-action="download-people-template"')
+    expect(html).toContain('data-action="import-people"')
+    expect(html).toContain('data-scope="users"')
+    expect(html).not.toContain('people-u3-toast')
     for (const col of ['姓名', '手机号', '项目用户类型', '常用空间', '项目关系状态', '关系来源', '更新时间', '操作']) {
       expect(html).toContain(`<th>${col}</th>`)
     }
@@ -83,6 +86,10 @@ describe('peopleView U2 tabs / columns / filters', () => {
     expect(html).toContain('姓名 / 手机号 / 员工编号')
     expect(html).toContain('导入员工')
     expect(html).toContain('新增员工')
+    expect(html).toContain('data-action="download-people-template"')
+    expect(html).toContain('data-action="import-people"')
+    expect(html).toContain('data-scope="staff"')
+    expect(html).not.toContain('people-u3-toast')
     for (const col of ['姓名', '手机号', '员工编号', '部门/班组', '当前项目角色', '在线状态', '更新时间', '操作']) {
       expect(html).toContain(`<th>${col}</th>`)
     }

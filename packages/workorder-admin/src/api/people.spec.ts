@@ -1,18 +1,24 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   ALL_STAFF_ROLE,
   ALL_USER_TYPE,
   EXCLUDED_IDENTITIES,
+  PEOPLE_IMPORT_PATH,
   STAFF_IDENTITIES,
   USER_IDENTITIES,
   applyPeopleClientFilter,
   buildPeopleQuery,
+  buildPeopleTemplatePath,
   buildPersonWriteBody,
   dash,
+  formatPeopleImportErrors,
+  importPeople,
   isProjectUserIdentity,
   isStaffIdentity,
   isValidPhone,
   maskPhone,
+  peopleImportSuccessCount,
+  peopleIoApiMessage,
   staffRoleApi,
   staffRoleLabel,
   toPersonRecord,
@@ -186,5 +192,93 @@ describe('people U2 helpers', () => {
     expect(applyPeopleClientFilter(items, { scope: 'users', identity: '业主' }).map((p) => p.id)).toEqual(['c'])
     expect(applyPeopleClientFilter(items, { scope: 'staff', keyword: 'e21' }).map((p) => p.id)).toEqual(['a'])
     expect(applyPeopleClientFilter(items, { scope: 'users', keyword: 'a栋' }).map((p) => p.id)).toEqual(['c'])
+  })
+})
+
+describe('people U3 template / import contract', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('puts scope on template query only; import path has no query', () => {
+    expect(buildPeopleTemplatePath('users')).toBe('/people/template?scope=users')
+    expect(buildPeopleTemplatePath('staff')).toBe('/people/template?scope=staff')
+    expect(buildPeopleTemplatePath('unknown')).toBe('/people/template?scope=staff')
+    expect(PEOPLE_IMPORT_PATH).toBe('/people/import')
+    expect(PEOPLE_IMPORT_PATH).not.toContain('?')
+    expect(PEOPLE_IMPORT_PATH).not.toContain('scope=')
+  })
+
+  it('formats import row errors and success count', () => {
+    expect(formatPeopleImportErrors([{ row: 2, message: '手机号无效' }])).toBe('第 2 行: 手机号无效')
+    expect(
+      formatPeopleImportErrors([
+        { row: 3, message: '身份非法' },
+        { row: 5, message: '状态非法' },
+      ]),
+    ).toBe('第 3 行: 身份非法\n第 5 行: 状态非法')
+    expect(peopleImportSuccessCount({ imported: 4 })).toBe(4)
+    expect(peopleImportSuccessCount({ count: 2 })).toBe(2)
+    expect(peopleIoApiMessage({ status: 404 }, '人员导入')).toBe('人员导入接口未就绪')
+    expect(peopleIoApiMessage({ status: 404 }, '下载模板')).toBe('下载模板接口未就绪')
+  })
+
+  it('POSTs import as multipart file+projectId+scope without query', async () => {
+    const fetchMock = vi.fn(async (url, init) => {
+      expect(url).toBe('/api/v1/people/import')
+      expect(String(url)).not.toContain('?')
+      expect(String(url)).not.toContain('scope=')
+      expect(init.method).toBe('POST')
+      expect(init.body).toBeInstanceOf(FormData)
+      expect(init.body.get('projectId')).toBe('prj_1')
+      expect(init.body.get('scope')).toBe('staff')
+      expect(init.body.get('file')).toBeTruthy()
+      expect(init.headers.Authorization).toBeUndefined()
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ code: 0, data: { imported: 2 } }),
+      }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const file = new File(['xlsx'], 'staff.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+    const data = await importPeople(file, { scope: 'staff', projectId: 'prj_1' })
+    expect(data).toEqual({ imported: 2 })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('surfaces data.errors row+message and 404 接口未就绪', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: false,
+        status: 400,
+        json: async () => ({
+          code: 400,
+          message: '导入失败',
+          data: { errors: [{ row: 2, message: '手机号无效' }] },
+        }),
+      })),
+    )
+    const file = new File(['xlsx'], 'users.xlsx')
+    await expect(importPeople(file, { scope: 'users', projectId: 'prj_1' })).rejects.toMatchObject({
+      message: expect.stringContaining('第 2 行: 手机号无效'),
+    })
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: false,
+        status: 404,
+        json: async () => ({ message: 'Not Found' }),
+      })),
+    )
+    await expect(importPeople(file, { scope: 'users', projectId: 'prj_1' })).rejects.toMatchObject({
+      status: 404,
+      message: '人员导入接口未就绪',
+    })
   })
 })

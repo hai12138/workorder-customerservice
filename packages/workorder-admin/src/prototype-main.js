@@ -29,9 +29,13 @@ import {
   applyPeopleClientFilter,
   createPerson,
   dash,
+  downloadPeopleTemplate,
+  importPeople,
   isProjectUserIdentity,
   isValidPhone,
   listPeople,
+  peopleImportSuccessCount,
+  peopleIoApiMessage,
   personApiMessage,
   scopeFromTab,
   staffRoleLabel,
@@ -1421,8 +1425,80 @@ async function handleAction(act, a) {
       render()
       return
     }
-    if (act === 'people-u3-toast') {
-      toast('导入/模板下一切片 U3')
+    if (act === 'download-people-template') {
+      const scope =
+        a.dataset.scope === 'users' || a.dataset.scope === 'staff'
+          ? a.dataset.scope
+          : scopeFromTab(getPeopleTab())
+      try {
+        await downloadPeopleTemplate({ scope })
+        toast('模板已下载')
+      } catch (err) {
+        toast(peopleIoApiMessage(err, '下载模板'))
+      }
+      return
+    }
+    if (act === 'import-people') {
+      const scope =
+        a.dataset.scope === 'users' || a.dataset.scope === 'staff'
+          ? a.dataset.scope
+          : scopeFromTab(getPeopleTab())
+      const input = document.createElement('input')
+      input.type = 'file'
+      input.accept = '.xlsx'
+      input.onchange = async (e) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+        if (!String(file.name || '').toLowerCase().endsWith('.xlsx')) {
+          toast('仅支持 xlsx 文件')
+          return
+        }
+        const label = scope === 'staff' ? '员工' : '项目用户'
+        modal(
+          `导入${label}`,
+          `<div class="health"><b>确认导入${label}数据？</b><p class="sub">文件：${esc(file.name)}<br>仅支持 xlsx；导入失败时不会写入数据库</p></div>`,
+          `<button class="btn" data-action="close">取消</button><button class="btn primary" data-action="confirm-import-people" data-scope="${scope}">确认导入</button>`,
+        )
+        window._importPeopleFile = file
+        window._importPeopleScope = scope
+      }
+      input.click()
+      return
+    }
+    if (act === 'confirm-import-people') {
+      const file = window._importPeopleFile
+      const scope =
+        a.dataset.scope === 'users' || a.dataset.scope === 'staff'
+          ? a.dataset.scope
+          : window._importPeopleScope || scopeFromTab(getPeopleTab())
+      delete window._importPeopleFile
+      delete window._importPeopleScope
+
+      if (!file) {
+        toast('未选择文件')
+        return
+      }
+
+      try {
+        document.getElementById('portal').innerHTML =
+          '<div class="overlay"><div class="modal"><div class="modal-body"><p>正在导入，请稍候...</p></div></div></div>'
+        const result = await importPeople(file, { scope })
+        const count = peopleImportSuccessCount(result)
+        const label = scope === 'staff' ? '员工' : '项目用户'
+        await afterWrite(`成功导入 ${count} 位${label}`)
+      } catch (err) {
+        document.getElementById('portal').innerHTML = ''
+        if (err?.status === 404) {
+          toast(peopleIoApiMessage(err, '人员导入'))
+          return
+        }
+        const message = err?.message || '导入失败'
+        modal(
+          '导入失败',
+          `<div class="health"><b>数据验证失败</b><p class="sub" style="white-space: pre-wrap; max-height: 300px; overflow-y: auto;">${esc(message)}</p></div>`,
+          `<button class="btn primary" data-action="close">关闭</button>`,
+        )
+      }
       return
     }
     if (act === 'people-tab') {
