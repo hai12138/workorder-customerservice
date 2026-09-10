@@ -31,11 +31,17 @@ type PersonInclude = {
   identity: string;
   status: string;
   createdAt: Date;
-  memberships: Array<{ projectId: string; project: { name: string } }>;
+  memberships: Array<{
+    projectId: string;
+    preferredSpaceId?: string | null;
+    project: { name: string };
+  }>;
   teamMembers: Array<{ team: { name: string; projectId: string } }>;
   roles: Array<{ role: { name: string } }>;
   channelBindings?: Array<unknown>;
 };
+
+type SpaceNode = { id: string; name: string; parentId: string | null };
 
 export type StaffPersonRecord = {
   id: string;
@@ -58,7 +64,9 @@ export type UserPersonRecord = {
   phone: string | null;
   identity: string;
   status: string;
-  spaceLabel: null;
+  spaceId: string | null;
+  spaceLabel: string | null;
+  spacePath: string | null;
   relationStatus: null;
   relationSource: null;
   updatedAt: string;
@@ -102,7 +110,8 @@ export class PeopleService {
       orderBy: { createdAt: 'asc' },
     });
 
-    return users.map((u) => this.toRecord(u, scope, query.projectId));
+    const spaces = scope === 'users' ? await this.loadProjectSpaces(query.projectId) : undefined;
+    return users.map((u) => this.toRecord(u, scope, query.projectId, spaces));
   }
 
   async create(dto: CreatePersonDto): Promise<PersonRecord> {
@@ -115,6 +124,11 @@ export class PeopleService {
       );
     }
 
+    const preferredSpaceId =
+      scope === 'users' && dto.spaceId != null
+        ? await this.requirePreferredSpace(dto.projectId, dto.spaceId)
+        : undefined;
+
     const user = await this.prisma.user.create({
       data: {
         id: this.newUserId(),
@@ -122,12 +136,18 @@ export class PeopleService {
         phone: this.normalizePhone(dto.phone),
         identity,
         status: dto.status ?? USER_STATUS_ACTIVE,
-        memberships: { create: { projectId: dto.projectId } },
+        memberships: {
+          create: {
+            projectId: dto.projectId,
+            ...(preferredSpaceId ? { preferredSpaceId } : {}),
+          },
+        },
       },
       include: this.personInclude(dto.projectId),
     });
 
-    return this.toRecord(user, scope, dto.projectId);
+    const spaces = scope === 'users' ? await this.loadProjectSpaces(dto.projectId) : undefined;
+    return this.toRecord(user, scope, dto.projectId, spaces);
   }
 
   async update(id: string, dto: UpdatePersonDto, projectId?: string): Promise<PersonRecord> {
@@ -146,6 +166,12 @@ export class PeopleService {
     }
 
     const pid = projectId ?? existing.memberships[0]?.projectId;
+    const bindSpace = scope === 'users' && dto.spaceId !== undefined;
+    if (bindSpace && dto.spaceId != null) {
+      if (!pid) throw new BadRequestException('空间不存在或不属于当前项目');
+      await this.requirePreferredSpace(pid, dto.spaceId);
+    }
+
     const updated = await this.prisma.user.update({
       where: { id },
       data: {
@@ -153,11 +179,22 @@ export class PeopleService {
         ...(dto.phone !== undefined ? { phone: this.normalizePhone(dto.phone) } : {}),
         ...(dto.identity !== undefined ? { identity: dto.identity } : {}),
         ...(dto.status !== undefined ? { status: dto.status } : {}),
+        ...(bindSpace && pid
+          ? {
+              memberships: {
+                update: {
+                  where: { projectId_userId: { projectId: pid, userId: id } },
+                  data: { preferredSpaceId: dto.spaceId },
+                },
+              },
+            }
+          : {}),
       },
       include: this.personInclude(pid),
     });
 
-    return this.toRecord(updated, scope, pid);
+    const spaces = scope === 'users' && pid ? await this.loadProjectSpaces(pid) : undefined;
+    return this.toRecord(updated, scope, pid, spaces);
   }
 
   async setStatus(id: string, status: UserStatusValue): Promise<PersonRecord> {
@@ -402,8 +439,15 @@ export class PeopleService {
     } as const;
   }
 
-  private toRecord(user: PersonInclude, scope: PeopleScope, projectId?: string): PersonRecord {
-    return scope === 'staff' ? this.toStaffRecord(user, projectId) : this.toUserRecord(user, projectId);
+  private toRecord(
+    user: PersonInclude,
+    scope: PeopleScope,
+    projectId?: string,
+    spaces?: Map<string, SpaceNode>,
+  ): PersonRecord {
+    return scope === 'staff'
+      ? this.toStaffRecord(user, projectId)
+      : this.toUserRecord(user, projectId, spaces);
   }
 
   private toStaffRecord(user: PersonInclude, projectId?: string): StaffPersonRecord {
@@ -430,22 +474,64 @@ export class PeopleService {
     };
   }
 
-  private toUserRecord(user: PersonInclude, projectId?: string): UserPersonRecord {
+  private toUserRecord(
+    user: PersonInclude,
+    projectId?: string,
+    spaces?: Map<string, SpaceNode>,
+  ): UserPersonRecord {
     const mem =
       (projectId ? user.memberships.find((m) => m.projectId === projectId) : undefined) ??
       user.memberships[0];
+    const space = this.preferredSpaceFields(mem?.preferredSpaceId, spaces);
     return {
       id: user.id,
       name: user.name,
       phone: user.phone,
       identity: user.identity,
       status: user.status,
-      spaceLabel: null,
+      spaceId: space.spaceId,
+      spaceLabel: space.spaceLabel,
+      spacePath: space.spacePath,
       relationStatus: null,
       relationSource: null,
       updatedAt: user.createdAt.toISOString(),
       projectId: mem?.projectId ?? projectId ?? '',
     };
+  }
+
+  private async requirePreferredSpace(projectId: string, spaceId: string): Promise<string> {
+    const space = await this.prisma.space.findUnique({ where: { id: spaceId } });
+    if (!space || space.projectId !== projectId) {
+      throw new BadRequestException('空间不存在或不属于当前项目');
+    }
+    return space.id;
+  }
+
+  private async loadProjectSpaces(projectId: string): Promise<Map<string, SpaceNode>> {
+    const spaces = await this.prisma.space.findMany({
+      where: { projectId },
+      select: { id: true, name: true, parentId: true },
+    });
+    return new Map(spaces.map((s) => [s.id, s]));
+  }
+
+  private preferredSpaceFields(
+    spaceId: string | null | undefined,
+    byId?: Map<string, SpaceNode>,
+  ): { spaceId: string | null; spaceLabel: string | null; spacePath: string | null } {
+    const empty = { spaceId: null, spaceLabel: null, spacePath: null };
+    if (!spaceId || !byId) return empty;
+    const node = byId.get(spaceId);
+    if (!node) return empty;
+    const names: string[] = [];
+    const seen = new Set<string>();
+    let cur: SpaceNode | undefined = node;
+    while (cur && !seen.has(cur.id)) {
+      seen.add(cur.id);
+      names.unshift(cur.name);
+      cur = cur.parentId ? byId.get(cur.parentId) : undefined;
+    }
+    return { spaceId: node.id, spaceLabel: node.name, spacePath: names.join('/') };
   }
 
   private normalizePhone(phone?: string | null) {

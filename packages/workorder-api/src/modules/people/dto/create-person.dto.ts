@@ -1,4 +1,4 @@
-import { IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsIn, IsNotEmpty, IsOptional, IsString, ValidateIf } from 'class-validator';
 import { ALL_PEOPLE_IDENTITIES, PEOPLE_SCOPES, USER_STATUSES } from '../people.constants';
 
 export class CreatePersonDto {
@@ -25,4 +25,9 @@ export class CreatePersonDto {
   @IsIn([...USER_STATUSES])
   @IsOptional()
   status?: (typeof USER_STATUSES)[number];
+
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  spaceId?: string | null;
 }
